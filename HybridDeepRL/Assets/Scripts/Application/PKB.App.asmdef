@@ -1,0 +1,16 @@
+{
+    "name": "PKB.App",
+    "rootNamespace": "PKB.App",
+    "references": [
+        "GUID:c0ca9b9539385da49b0ae9b2e6f95bb8"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
