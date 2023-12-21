@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Assertions;
 
 namespace GameLogic
 {
@@ -10,6 +11,10 @@ namespace GameLogic
         // list of offsets from center of the block
         // (x,y) where origin in grid is lower left corner
         // positive x to the right, positive y up
-        public List<Vector2Int> offsets;
+        private List<Vector2Int> m_offsets;
+
+        public List<Vector2Int> getBlockOffsets(){
+            return m_offsets;
+        }
     }
 }
