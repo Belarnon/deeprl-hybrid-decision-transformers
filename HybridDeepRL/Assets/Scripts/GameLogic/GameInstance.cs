@@ -34,6 +34,7 @@ namespace GameLogic
         // Getters and setters
         public bool gameIsSolvable() { return m_isSolvable; }
         public int getScore() { return m_score; }
+        public bool[,] getGrid() { return m_grid; }
         public List<BlockScriptableObject> getGivenBlocks() { return m_givenBlocks; }
         
         // Methods
