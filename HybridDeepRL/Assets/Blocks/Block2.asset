@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9e53183075c6bb74f93dba7973de34cd, type: 3}
   m_Name: Block2
   m_EditorClassIdentifier: 
-  offsets:
+  m_offsets:
   - {x: 1, y: 0}
   - {x: 0, y: 1}
   - {x: 1, y: 1}
+  center: {x: 1, y: 1}
