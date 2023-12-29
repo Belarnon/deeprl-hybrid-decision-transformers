@@ -79,6 +79,8 @@ namespace PKB.App
             gameInstance = new GameInstance(gridSize.x, gridSize.y, numberOfBlocksToSelect, blockAtlas);
             onGridSizeChanged.Invoke(gridSize);
             onNumberOfBlocksToSelectChanged.Invoke(numberOfBlocksToSelect);
+            onBlockAtlasChanged.Invoke(blockAtlas);
+            onGameReset.Invoke();
         }
 
         #endregion
