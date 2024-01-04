@@ -63,6 +63,7 @@ namespace PBK.Agents
         public override void OnEpisodeBegin()
         {
             ResetGame();
+            RequestDecision();
         }
 
         public override void CollectObservations(VectorSensor sensor)
@@ -91,15 +92,22 @@ namespace PBK.Agents
             int blockIndex = actions.DiscreteActions[0];
             if (blockIndex >= numberOfAvailableBlocks)
             {
-                SetReward(-0.05f);
+                SetReward(-0.001f);
+                RequestDecision();
                 return;
             }
             int x = actions.DiscreteActions[1];
             int y = actions.DiscreteActions[2];
             bool success = gameManager.AttemptPutBlock(blockIndex, new Vector2Int(x, y));
-            if (!success)
+            if (success)
             {
-                SetReward(-0.05f);
+                float reward = ComputeScoreReward(gameManager.GetCurrentScore());
+                SetReward(reward);
+            }
+            else
+            {
+                SetReward(-0.001f);
+                RequestDecision();
             }
         }
 
@@ -109,8 +117,7 @@ namespace PBK.Agents
 
         public void OnGameStep()
         {
-            float reward = ComputeScoreReward(gameManager.GetCurrentScore());
-            AddReward(reward);
+            RequestDecision();
         }
 
         public void OnGameOver()

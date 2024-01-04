@@ -130,7 +130,7 @@ MonoBehaviour:
   m_Model: {fileID: 0}
   m_InferenceDevice: 1
   m_BehaviorType: 0
-  m_BehaviorName: TenTenPlayer
+  m_BehaviorName: TenTen
   TeamId: 0
   m_UseChildSensors: 0
   m_UseChildActuators: 1
