@@ -15,8 +15,6 @@ namespace GameLogic
             m_nrGivenBlocks = 3;
             m_blockAtlas = atlas;
             m_atlasSize = atlas.getAtlasSize();
-            string log = string.Format("atlas size {0}", m_atlasSize);
-            Debug.Log(log);
 			_setup();
         }
 
@@ -26,8 +24,6 @@ namespace GameLogic
             m_nrGivenBlocks = nrGivenBlocks;
             m_blockAtlas = atlas;
             m_atlasSize = atlas.getAtlasSize();
-            string log = string.Format("atlas size {0}", m_atlasSize);
-            Debug.Log(log);
             _setup();
         }
 
@@ -51,6 +47,8 @@ namespace GameLogic
             if (!_checkBlock(offsets, center)) { return false; }
             // else the block can be placed
             _setBlock(offsets, center);
+            // remove given block from list
+            m_givenBlocks.RemoveAt(index);
             // if the list of given blocks is empty, sample new ones
             if (m_givenBlocks.Count == 0) { _sampleNewBlocks(); }
             // check solvability
@@ -144,6 +142,9 @@ namespace GameLogic
             int max_width = 0;
             int min_height = m_height;
             int max_height = 0;
+            // set center point
+            m_grid[center.x, center.y] = true;
+            scoreChange++;
             foreach (Vector2Int offset in offsets){
                 scoreChange++;
                 Vector2Int gridPoint = offset + center;
@@ -151,6 +152,8 @@ namespace GameLogic
                 max_width = Math.Max(max_width, gridPoint.x);
                 min_height = Math.Min(min_height, gridPoint.y);
                 max_height = Math.Max(max_height, gridPoint.y);
+                // change gridpoint value
+                m_grid[gridPoint.x, gridPoint.y] = true;
             }
             // check grid for full lines and delete them
             scoreChange += _deleteFullLines(min_width, max_width, min_height, max_height);
@@ -182,9 +185,15 @@ namespace GameLogic
                 // add row index to full_rows
                 if (colIsFull) { full_cols.Add(col); }
             }
-            // go over every col and line and delete the gridpoints
+            // go over every full row and delete the gridpoints
             foreach (int row in full_rows){
-                foreach (int col in full_cols){
+                for (int col=0; col<m_width; col++){
+                    m_grid[col, row] = false;
+                }
+            }
+            // go over every full col and delete the gridpoints
+            foreach (int col in full_cols){
+                for (int row=0; row<m_height; row++){
                     m_grid[col, row] = false;
                 }
             }

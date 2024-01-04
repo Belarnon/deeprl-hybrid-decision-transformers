@@ -1478,8 +1478,8 @@ RectTransform:
   m_Children:
   - {fileID: 1079843198}
   - {fileID: 810983075}
-  - {fileID: 1668333659}
   - {fileID: 149619349}
+  - {fileID: 1668333659}
   - {fileID: 2063030146}
   - {fileID: 1085453369}
   m_Father: {fileID: 1740211682}

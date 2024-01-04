@@ -14,8 +14,6 @@ namespace GameLogic
             return m_blocks.Count;
         }
         public BlockScriptableObject getBlock(int index){
-            string log = string.Format("atlas size {0}, index {1}", m_blocks.Count, index);
-            Debug.Log(log);
             Debug.Assert(0 <= index && index < m_blocks.Count);
             return m_blocks[index];
         }

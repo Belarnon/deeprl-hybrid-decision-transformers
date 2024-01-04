@@ -35,18 +35,18 @@ namespace PKB.UI
 
         #region Internal State
 
-        private List<GameObject> blockPanels;
+        private List<GameObject> blockPanels = new();
 
-        private List<BlockRenderer> blockRenderers;
+        private List<BlockRenderer> blockRenderers = new();
 
         #endregion
 
         #region Unity Lifecycle
 
-        private void Awake()
+        private void Start()
         {
             CheckDependencies();
-            CreateBlockPanels();
+            ResetBlockPanels();
         }
 
         #endregion
