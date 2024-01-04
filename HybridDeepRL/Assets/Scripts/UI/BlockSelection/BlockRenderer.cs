@@ -104,7 +104,7 @@ namespace PKB.UI
             }
         }
 
-        private void DrawCell(Vector2Int coordinates, Vector2 offset = default(Vector2))
+        private void DrawCell(Vector2Int coordinates, Vector2 offset = default)
         {
             // Create a new child with an image component.
             GameObject cell = new GameObject($"Cell ({coordinates.x}, {coordinates.y})");

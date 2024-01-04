@@ -104,6 +104,22 @@ namespace PKB.App
         }
 
         /// <summary>
+        /// Attempts to put the block with the given index at the center block to the given coordinates.
+        /// </summary>
+        /// <param name="blockIndex">The index of the block to place.</param>
+        /// <param name="coordinates">The coordinates of where to place the center block of the tile.</param>
+        /// <returns>True if the block was successfully placed, false otherwise.</returns>
+        public bool AttemptPutBlock(int blockIndex, Vector2Int coordinates)
+        {
+            bool success = gameInstance.putBlock(blockIndex, coordinates);
+            if (success)
+            {
+                UpdateState();
+            }
+            return success;
+        }
+
+        /// <summary>
         /// Resets the game to its initial state.
         /// </summary>
         public void ResetGame()
@@ -155,6 +171,24 @@ namespace PKB.App
         public List<BlockScriptableObject> GetAvailableBlocks()
         {
             return gameInstance.getGivenBlocks();
+        }
+
+        /// <summary>
+        /// Returns the number of blocks that can be selected in total (regardless of how many are currently available).
+        /// </summary>
+        /// <returns>The number of blocks that can be selected in total.</returns>
+        public int GetNumberOfBlocksToSelect()
+        {
+            return numberOfBlocksToSelect;
+        }
+
+        /// <summary>
+        /// Returns the size of the grid.
+        /// </summary>
+        /// <returns>The size of the grid.</returns>
+        public Vector2Int GetGridSize()
+        {
+            return gridSize;
         }
 
         #endregion
