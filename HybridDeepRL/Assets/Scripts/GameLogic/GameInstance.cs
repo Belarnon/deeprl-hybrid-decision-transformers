@@ -15,6 +15,8 @@ namespace GameLogic
             m_nrGivenBlocks = 3;
             m_blockAtlas = atlas;
             m_atlasSize = atlas.getAtlasSize();
+            string log = string.Format("atlas size {0}", m_atlasSize);
+            Debug.Log(log);
 			_setup();
         }
 
@@ -24,6 +26,8 @@ namespace GameLogic
             m_nrGivenBlocks = nrGivenBlocks;
             m_blockAtlas = atlas;
             m_atlasSize = atlas.getAtlasSize();
+            string log = string.Format("atlas size {0}", m_atlasSize);
+            Debug.Log(log);
             _setup();
         }
 
