@@ -74,7 +74,7 @@ namespace PKB.App
 
         #region Unity Lifecycle
 
-        private void Awake()
+        private void Start()
         {
             gameInstance = new GameInstance(gridSize.x, gridSize.y, numberOfBlocksToSelect, blockAtlas);
             onGridSizeChanged.Invoke(gridSize);

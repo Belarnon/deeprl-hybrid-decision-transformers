@@ -43,7 +43,7 @@ namespace PKB.UI
 
         #region Unity Lifecycle
 
-        private void Start()
+        private void Awake()
         {
             CheckDependencies();
             ResetBlockPanels();
