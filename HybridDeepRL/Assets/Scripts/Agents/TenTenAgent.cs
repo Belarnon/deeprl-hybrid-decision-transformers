@@ -91,7 +91,7 @@ namespace PBK.Agents
             int blockIndex = actions.DiscreteActions[0];
             if (blockIndex >= numberOfAvailableBlocks)
             {
-                AddReward(-0.05f);
+                SetReward(-0.05f);
                 return;
             }
             int x = actions.DiscreteActions[1];
@@ -99,7 +99,7 @@ namespace PBK.Agents
             bool success = gameManager.AttemptPutBlock(blockIndex, new Vector2Int(x, y));
             if (!success)
             {
-                AddReward(-0.05f);
+                SetReward(-0.05f);
             }
         }
 
@@ -115,7 +115,7 @@ namespace PBK.Agents
 
         public void OnGameOver()
         {
-            AddReward(-1f);
+            SetReward(-1f);
             EndEpisode();
         }
 
