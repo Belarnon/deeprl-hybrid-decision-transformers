@@ -112,7 +112,7 @@ namespace GameLogic
         }
         private bool _checkSolvability(){
             // iterate over all free gridpoints and available blocks and check if they can be set
-            // if there is a block and a center that work, return true
+            // if there are a block and a center that work, return true
             foreach (BlockScriptableObject block in m_givenBlocks){
                 List<Vector2Int> offsets = block.getBlockOffsets();
                 for (int y=0; y < m_height; y++){
@@ -142,9 +142,6 @@ namespace GameLogic
             int max_width = 0;
             int min_height = m_height;
             int max_height = 0;
-            // set center point
-            m_grid[center.x, center.y] = true;
-            scoreChange++;
             foreach (Vector2Int offset in offsets){
                 scoreChange++;
                 Vector2Int gridPoint = offset + center;

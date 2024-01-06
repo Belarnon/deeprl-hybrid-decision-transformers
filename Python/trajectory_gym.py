@@ -21,32 +21,29 @@ class TrajectoryGym():
         self.env = env
         self.filepath = filepath
         self.ds_creator = TrajectoryDatasetCreator(filepath)
-        self.is_recording = True
 
         # call reset on environment to get the first state s_0 for the beginning
         # of the dataset trajectory!
-        state = self.env.reset()
+        state = self.env.reset()[0] # state is list with array
         self.ds_creator.addStartState(state)
 
     # while loop that only ends after the user gives an "end of game" EOG input
     # or the program crashes
     def recording_loop(self):
         # start loop
-        while (self.is_recording):
+        while True:
             # wait for user input
-            user_action, recording_stop = self.read_input()
+            user_action, is_recording = self.read_input()
+            #user_action, recording_stop = self.env.action_space.sample(), False
 
             # if the user stops the recording with the EOG
             # finish the current trajectory and save the created dataset
-            if recording_stop:
-                self.is_recording = False
-                self.ds_creator.finishTrajectory()
-                self.ds_creator.saveTrajectories()
-                break
+            if not is_recording: break
 
             # send action to environment, get observation
-            observation = self.env.step(user_action)
-            state, reward, is_done, info = observation
+            state, reward, is_done, info = self.env.step(user_action)
+            state = state[0]
+            state_view = state[:100].reshape((10,10))
             
             # send observation to dataset creator to add to current trajectory
             # TODO make decision: do we add "invalid" actions that do not alter
@@ -59,8 +56,9 @@ class TrajectoryGym():
             # then we must invoke the stop of current trajectory recording and call finish trajectory
             if is_done:
                 self.ds_creator.finishTrajectory()
-                state = self.env.reset()
+                state = self.env.reset()[0] # state is list with array
                 self.ds_creator.addStartState(state)
+
         # EOG has been given
         self.ds_creator.finishTrajectory()
         self.ds_creator.saveTrajectories()
@@ -86,6 +84,7 @@ class TrajectoryGym():
                 # stop recording
                 user_action = None
                 is_valid_input = True
+                break
             # valid input: "a x y"
             # split by ' ' -> check if only 3 element
                 
@@ -103,7 +102,7 @@ class TrajectoryGym():
                 # if something goes wrong, print not integers and break out
                 except:
                     print(f"some inputs were not integers!: {user_input}")
-                    break
+                    continue
                 
                 # check range
                 try:
@@ -113,19 +112,19 @@ class TrajectoryGym():
                 # if an assertion fail, print 'wrong range'
                 except:
                     print(f"some inputs were not in the valid range! {self.nr_given_blocks=}, {self.gridsize=}")
-                    break
+                    continue
 
                 # if everything is ok, set user_action to tuple (a,x,y)
                 # set valid flag to true
                 user_action = [a,x,y]
                 is_valid_input = True
 
-        # output: EOG means valid input without user_action and recording_flag set to false (-> stop recording)
-        # otherwise we return a vild user action with recording_flag set to true (-> keep recording)
+        # output: EOG means valid input without user_action and is_recording set to false (-> stop recording)
+        # otherwise we return a vild user action with is_recording set to true (-> keep recording)
         if user_action is None:
-            return None, True
+            return None, False
         else:
-            return user_action, False
+            return user_action, True
 
 class TrajectoryDatasetCreator():
     """
@@ -167,6 +166,7 @@ class TrajectoryDatasetCreator():
         # save list of trajectories to a file
         # should be loadable by a torch dataset for the transfomer!
         torch.save(self.trajectories, self.filepath)
+        return
 
 
 def main():
@@ -178,7 +178,7 @@ def main():
 
     # create trajectory gym with this env
     # also give gridsize and nur of blocks
-    traj_gym = TrajectoryGym(10, 3, env, "dataset\\first_attempt.pt")
+    traj_gym = TrajectoryGym(10, 3, env, "Python\\dataset\\first_attempt.pt")
     # start recording loop
     traj_gym.recording_loop()
     # after recording stopped for whatever reason, close environment

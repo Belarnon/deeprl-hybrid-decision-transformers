@@ -143,11 +143,12 @@ namespace PBK.Agents
 
         private static void FillSensorWithGrid(VectorSensor sensor, bool[,] grid)
         {
+            // fills grid row-wise, starting with the upper most row
             int width = grid.GetLength(0);
             int height = grid.GetLength(1);
-            for (int x = 0; x < width; x++)
+            for (int y = height - 1; y >= 0; y--)
             {
-                for (int y = height - 1; y >= 0; y--)
+                for (int x = 0; x < width; x++)
                 {
                     sensor.AddObservation(grid[x, y]);
                 }
