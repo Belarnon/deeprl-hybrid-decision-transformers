@@ -1,4 +1,5 @@
 import torch
+import sys
 
 from mlagents_envs.environment import UnityEnvironment
 from mlagents_envs.envs.unity_gym_env import UnityToGymWrapper
@@ -43,7 +44,7 @@ class TrajectoryGym():
             # send action to environment, get observation
             state, reward, is_done, info = self.env.step(user_action)
             state = state[0]
-            state_view = state[:100].reshape((10,10))
+            #DEV_state_view = state[:100].reshape((10,10))
             
             # send observation to dataset creator to add to current trajectory
             # TODO make decision: do we add "invalid" actions that do not alter
@@ -60,7 +61,8 @@ class TrajectoryGym():
                 self.ds_creator.addStartState(state)
 
         # EOG has been given
-        self.ds_creator.finishTrajectory()
+        if len(self.ds_creator.currentTrajectory) > 0:
+            self.ds_creator.finishTrajectory()
         self.ds_creator.saveTrajectories()
 
 
@@ -169,7 +171,7 @@ class TrajectoryDatasetCreator():
         return
 
 
-def main():
+def main(filepath : str):
     # open connection to unity ml agent
     print("Waiting for Unity environment...")
     env = UnityEnvironment()
@@ -178,7 +180,7 @@ def main():
 
     # create trajectory gym with this env
     # also give gridsize and nur of blocks
-    traj_gym = TrajectoryGym(10, 3, env, "Python\\dataset\\first_attempt.pt")
+    traj_gym = TrajectoryGym(10, 3, env, filepath=filepath)
     # start recording loop
     traj_gym.recording_loop()
     # after recording stopped for whatever reason, close environment
@@ -186,4 +188,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) != 2:
+        print(sys.argv)
+        raise RuntimeError("missing filepath!")
+    main(sys.argv[1])
