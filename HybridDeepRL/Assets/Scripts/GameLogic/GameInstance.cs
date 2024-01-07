@@ -58,6 +58,7 @@ namespace GameLogic
         }
         public void reset(){
             _setup();
+            Debug.Log(getGrid());
         }
         public void reset(BlockAtlasScriptableObject atlas){
             m_blockAtlas = atlas;
@@ -95,6 +96,14 @@ namespace GameLogic
             // setup the actual grid as a 2d boolean array
             // coordinates are (width, height)
             m_grid = new bool[m_width, m_height];
+
+            for (int x=0; x < m_width; x++){
+                for (int y=0; y < m_height; y++){
+                    if (m_grid[x,y]) { Debug.Log($"already set gridcell at ({x},{y})!"); }
+                    m_grid[x,y] = false;
+                }
+            }
+
             // start while loop until the created game is solvable
             while (!m_isSolvable){
                 // create first nr_givenBlocks and fill it by randomly selecting

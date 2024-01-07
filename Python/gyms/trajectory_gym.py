@@ -61,7 +61,7 @@ class TrajectoryGym():
                 self.ds_creator.addStartState(state)
 
         # EOG has been given
-        if len(self.ds_creator.currentTrajectory) > 0:
+        if len(self.ds_creator.currentTrajectory) >= 2:
             self.ds_creator.finishTrajectory()
         self.ds_creator.saveTrajectories()
 

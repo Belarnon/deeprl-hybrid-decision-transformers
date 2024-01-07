@@ -94,6 +94,7 @@ namespace PKB.App
         /// <param name="coordinates">The coordinates of where to place the center block of the tile.</param>
         public void PutBlock(int blockIndex, Vector2Int coordinates)
         {
+            Debug.Log($"Putting block {blockIndex} at {coordinates}.");
             bool success = gameInstance.putBlock(blockIndex, coordinates);
             if (!success)
             {
@@ -111,6 +112,7 @@ namespace PKB.App
         /// <returns>True if the block was successfully placed, false otherwise.</returns>
         public bool AttemptPutBlock(int blockIndex, Vector2Int coordinates)
         {
+            Debug.Log($"Attempting to put block {blockIndex} at {coordinates}.");
             bool success = gameInstance.putBlock(blockIndex, coordinates);
             if (success)
             {

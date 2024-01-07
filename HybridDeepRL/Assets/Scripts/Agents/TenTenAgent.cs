@@ -87,6 +87,11 @@ namespace PBK.Agents
             }
         }
 
+        public override void Heuristic(in ActionBuffers actionsOut)
+        {
+            //base.Heuristic(actionsOut);
+            
+        }
         public override void OnActionReceived(ActionBuffers actions)
         {
             int blockIndex = actions.DiscreteActions[0];
