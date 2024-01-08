@@ -36,6 +36,7 @@ namespace PKB.UI
             gameGrid = GetComponent<GameGrid>();
             gameManager.onGameStep.AddListener(OnGameStep);
             gameManager.onGameOver.AddListener(OnGameStep);
+            gameManager.onGameReset.AddListener(OnGameStep);
         }
 
         #endregion

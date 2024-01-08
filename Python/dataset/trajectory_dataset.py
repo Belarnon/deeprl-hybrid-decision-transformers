@@ -132,5 +132,13 @@ class TrajectoryDataset(torch.utils.data.Dataset):
         return len(self.expert_trajectories)
     
     
-    def __getitem__(self, idx) -> list:
-        return self.expert_trajectories[idx]
+    def __getitem__(self, idx: int) -> dict:
+        tau = self.expert_trajectories[idx]
+
+        states = torch.from_numpy(tau[::3])
+        actions = torch.from_numpy(tau[1::3]) # every third element starting at index 1
+        rtg = torch.from_numpy(tau[1::3])
+
+        # TODO what about attention mask for sequence?
+
+        return { "states" : states, "actions" : actions, "rtg" : rtg }

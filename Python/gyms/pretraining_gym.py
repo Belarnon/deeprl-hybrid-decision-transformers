@@ -1,0 +1,221 @@
+import numpy as np
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
+
+import os
+import argparse
+import pyfiglet
+from safetensors.torch import save_file, load_file
+from tqdm import tqdm
+
+from ..dataset.trajectory_dataset import TrajectoryDataset
+from ..networks.decision_transformer import DecisionTransformer
+
+"""
+Technically this is not a gym, as it does not use Unity ML Agents.
+This class provides the complete offline pretraining of a decision transformer, including:
+    - argument parsing
+    - loading/creating dataset
+    - training
+    - export model
+
+code is heavily inspired by https://github.com/bastianschildknecht/cil-ethz-2023-kebara/blob/main/train_latent_mlp.py
+    
+"""
+
+def banner():
+    print(pyfiglet.figlet_format("HDT", font="slant"))
+
+def parse_args():
+
+    """
+    state_dim,
+    action_dim,
+    hidden_dim=128, # aka embedding_dim
+    max_length=None,
+    action_tanh=True,
+    action_space=(3,10,10)
+    """
+
+    parser = argparse.ArgumentParser(description="Trains the Hybrid Decision Transformer HDT")
+    # DATASET
+    parser.add_argument("-ds", "--dataset", type=str,
+                        help="The dataset to use as training data.", required=True)
+    parser.add_argument("-conv", "--conversion", type=bool,
+                        help="Flag to indicate that the given dataset needs to be converted.", default=False)
+    parser.add_argument("-minlen", "--min_seq_len", type=int,
+                        help="The (inclusive) minimum length of sequences to train on.", required=True)
+    parser.add_argument("-maxlen", "--max_seq_len", type=int,
+                        help="The (inclusive) maximum length of sequences to train on.", required=True)
+    
+
+    # TRANSFORMER
+    parser.add_argument("-sdim", "--state_dim", type=int,
+                        help="The dimension of the state vector in the given dataset.", default=175)
+    parser.add_argument("-adim", "--act_dim", type=int,
+                        help="The dimension of the action vector in the given dataset.", default=3)
+    parser.add_argument("-maxeplen", "--max_ep_len", type=int,
+                        help="The (inclusive) maximum length of ANY sequences to train on. This is used for the timestep embedding.", default=4096)
+    parser.add_argument("-aspc", "--act_space", type=(int,int,int),
+                        help="The action space for the embedding.", default=(3,10,10))
+    parser.add_argument("-hd", "--hidden_dim", type=int,
+                        help="The dimension of the embedding for the transformer.", default=128)
+    parser.add_argument("-tanh", "--act_tanh", type=bool,
+                        help="Set tanh layer at the end of action predictor.", default=False)
+    
+    # TRAINING
+    #   LOAD AND SAVE
+    parser.add_argument("-lm", "--load_model", type=bool,
+                        help="Load the model", default=False)
+    parser.add_argument("-lmd", "--load_model_dir", type=str,
+                        help="The filepath to the model that should be loaded.", default="")
+    
+    #   TRAINING ARGUMENTS
+    parser.add_argument("-b", "--batch_size", type=int,
+                        help="The batch size to use for training.", default=4096)
+    parser.add_argument("-e", "--epochs", type=int,
+                        help="The number of epochs to train.", default=2)
+    parser.add_argument("-lr", "--learning_rate", type=float,
+                        help="The learning rate to use for training.", default=0.001)
+    parser.add_argument("-ss", "--step_size", type=int,
+                        help="The stepsize used in the SGD algorithm. ", default=1)
+    parser.add_argument("-dc", "--lr_decay", type=float,
+                        help="Decay of the learning rate for a Learning Rate Scheduler.", default=1.0)
+    parser.add_argument("-lfn", "--loss_fn", type=str,
+                        help="Name of loss function to use.", default="CE")
+
+    #   MISCELLANEOUS
+    parser.add_argument("-w", "--workers", type=int,
+                        help="The number of workers to use for data loading.", default=0)
+    parser.add_argument("-s", "--shuffle", type=bool,
+                        help="Shuffle the dataset before training.")
+    parser.add_argument("-v", "--verbose", type=bool,
+                        help="Enable verbose output.")
+    parser.add_argument("-gpu", "--use_gpu", type=bool,
+                        help="Enable training on gpu device.", default=True)
+    
+    # OUTPUT
+    parser.add_argument("-moddir", "--model_dir", type=str,
+                        help="The folder to use for saving the model.", required=True)
+    parser.add_argument("-se", "--save_every", type=int,
+                        help="Save the model every n epochs.", default=1)
+
+def find_best_device(no_gpu: bool = False) -> torch.device:
+    # Check if we should use the CPU
+    if no_gpu:
+        return torch.device('cpu')
+
+    # Check if CUDA is available
+    if torch.cuda.is_available():
+
+        # Get all the available GPUs
+        gpu_count = torch.cuda.device_count()
+
+        # Check if there are multiple GPUs available
+        if gpu_count > 1:
+            # Return the first GPU
+            device = torch.device('cuda:0')
+        else:
+            # Return the only GPU
+            device = torch.device('cuda')
+    else:
+        # No CUDA available, return the CPU
+        device = torch.device('cpu')
+
+    return device
+
+def training(args : argparse.Namespace):
+
+    # load dataset
+    tds = TrajectoryDataset(
+        args.min_seq_len,
+        args.max_seq_len,
+        args.dataset,
+        args.conversion
+    )
+
+    # create dataloader
+    dataloader = DataLoader(
+        dataset=tds,
+        batch_size=args.batch_size,
+        shuffle=args.shuffle,
+        num_workers=args.workers
+    )
+
+    # create transformer / load model
+    model = DecisionTransformer(
+        args.state_dim,
+        args.act_dim,
+        args.hidden_dim,
+        args.max_seq_len,
+        args.max_ep_len,
+        args.act_tanh,
+        args.act_space
+    )
+
+    if args.load_model:
+        model.load_state_dict(load_file(args.load_model_dir))
+        model.eval()
+
+    # setup optimizer, loss, device, 
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer=optimizer,
+        step_size=args.step_size,
+        gamma=args.lr_decay
+    )
+    device = find_best_device(args.gpu)
+
+    # TODO how to define loss function?
+    if args.loss_fn == "CE":
+        loss_fn = torch.nn.CrossEntropyLoss()
+    elif args.loss_fn == "MSE":
+        loss_fn = lambda y_hat, y: torch.mean((y_hat - y)**2)
+    else:
+        raise NotImplementedError(f"Unknown loss function {args.loss_fn}!")
+
+    # start training loop
+    step, epoch_loss = 0, 0, 0
+
+    for epoch in tqdm(range(args.epochs), desc="Epochs", unit="epoch", leave=True, position=0):
+        for batch in tqdm(dataloader, desc="Batches", unit="batch", leave=False, position=1):
+
+            # TODO how does batch data work with dictionaries?
+            # Get data
+            states = batch['states'].to(device).squeeze()
+            actions = batch['actions'].to(device).squeeze()
+            rtg = batch['rtg'].to(device).squeeze()
+            timesteps = torch.linspace(0, args.max_ep_len, args.max_ep_len)
+            # TODO attention mask?
+            # attention_mask
+
+            # reset gradients
+            optimizer.zero_grad()
+
+            # forward pass
+            output = model(states, actions, rtg, timesteps)
+
+            # compute loss
+            loss = loss_fn(output)
+            epoch_loss += loss.item()
+
+            # backprop
+            loss.backward()
+            optimizer.step()
+            step += 1
+
+        # save model after some epocds
+        if epoch % args.save_every == 0:
+            save_file(model.state_dict(), os.path.join(args.model_dir, f"model_e{epoch}.safetensors"))
+        
+        # let learning rate scheduler make a step
+        scheduler.step()
+
+    # save final model and optimizer
+    save_file(model.state_dict(), os.path.join(args.model_dir, f"model_final.safetensors"))
+    
+if __name__=="__main__":
+    banner()
+    args = parse_args()
+    training(args)
