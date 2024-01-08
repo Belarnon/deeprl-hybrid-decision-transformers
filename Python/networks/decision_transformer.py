@@ -15,15 +15,18 @@ class DecisionTransformer(nn.Module):
             max_length=None, # the number of timesteps to consider in the past
             max_episode_length=4096, # the maximum number of timesteps in an episode/trajectory
             action_tanh=True,
-            action_space=(3,10,10)
+            action_space=(3,10,10),
+            encode_actions=True # whether to one-hot encode actions
             ):
         super().__init__(state_dim, action_dim, max_length)
 
         self.state_dim = state_dim
-        self.action_dim = action_dim if action_space is None else action_space.sum()
+        self.action_dim = action_dim
+        self.action_encoded_dim = sum(action_space)
         self.max_length = max_length
         self.hidden_dim = hidden_dim
         self.action_space = action_space
+        self.encode_actions = encode_actions
         
         self.transformer = TransformerBlock(
             self.hidden_dim,
@@ -33,7 +36,7 @@ class DecisionTransformer(nn.Module):
         )
 
         self.embed_timestep = nn.Embedding(max_episode_length, self.hidden_dim)
-        self.embed_action = nn.Linear(self.action_dim, self.hidden_dim)
+        self.embed_action = nn.Linear((self.action_encoded_dim if encode_actions else self.action_dim), self.hidden_dim) # use appropriate input dim depending on `encode_actions`
         self.embed_state = nn.Linear(self.state_dim, self.hidden_dim)
         self.embed_return = nn.Linear(1, self.hidden_dim)
 
@@ -43,11 +46,12 @@ class DecisionTransformer(nn.Module):
 
         self.predict_return = nn.Linear(self.hidden_dim, 1)
         self.predict_action = nn.Sequential(*(
-            [nn.Linear(self.hidden_dim, self.action_dim)]
+            [nn.Linear(self.hidden_dim, self.action_encoded_dim)] # predicted actions are always one-hot encoded
             + ([nn.Tanh()] if action_tanh else [])
         ))
         self.predict_state = nn.Linear(hidden_dim, self.state_dim)
-    
+
+
     def forward(self, states: torch.tensor, actions: torch.tensor, returns_to_go: torch.tensor, timesteps: torch.tensor, attention_mask=None):
         """
         states: shape (batch_size, seq_length, state_dim)
@@ -63,7 +67,7 @@ class DecisionTransformer(nn.Module):
             # attention mask for GPT: 1 if can be attended to, 0 if not
             attention_mask = torch.ones((batch_size, seq_length), dtype=torch.long)
 
-        if self.action_space is not None:
+        if self.encode_actions:
             # one-hot encode actions
             max_classes = max(self.action_space) # the maximum number of classes needed for one-hot encoding
             one_hot_actions = one_hot(actions, max_classes).float() # one hot encoding for max_classes, which might be larger than the actual action space
@@ -106,16 +110,13 @@ class DecisionTransformer(nn.Module):
         next_action = self.predict_action(embeddings) # shape (batch_size, seq_length, action_dim)
         next_return = self.predict_return(embeddings) # shape (batch_size, seq_length, 1)
 
-
         return next_state, next_action, next_return
+
 
     def decode_actions(self, actions: torch.tensor):
         """
-        actions: shape (batch_size, seq_length, action_dim)
+        actions: shape (batch_size, seq_length, action_encoded_dim), where actions are one-hot encoded
         """
-
-        if self.action_space is None:
-            return actions
 
         target_dim = len(self.action_space)
 

@@ -59,6 +59,8 @@ def parse_args():
                         help="The (inclusive) maximum length of ANY sequences to train on. This is used for the timestep embedding.", default=4096)
     parser.add_argument("-aspc", "--act_space", type=(int,int,int),
                         help="The action space for the embedding.", default=(3,10,10))
+    parser.add_argument("-aenc", "--act_enc", type=bool,
+                        help="Flag to indicate whether the actions should be one-hot encoded.", default=True)
     parser.add_argument("-hd", "--hidden_dim", type=int,
                         help="The dimension of the embedding for the transformer.", default=128)
     parser.add_argument("-tanh", "--act_tanh", type=bool,
@@ -151,7 +153,8 @@ def training(args : argparse.Namespace):
         args.max_seq_len,
         args.max_ep_len,
         args.act_tanh,
-        args.act_space
+        args.act_space,
+        args.act_enc
     )
 
     if args.load_model:
