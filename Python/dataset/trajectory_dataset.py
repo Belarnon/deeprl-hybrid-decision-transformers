@@ -29,9 +29,13 @@ class TrajectoryDataset(torch.utils.data.Dataset):
         self.expert_trajectories = []
         if needs_conversion:
             self._load_convert_save()
+        else:
+            self._load()
     
-    def load(self, filepath : str):
-        self.expert_trajectories = torch.load(filepath)
+    def _load(self):
+        taus = torch.load(self.filepath)
+        # leave out seqs that are shorter or longer than provided min/max_subseq_length
+        self.expert_trajectories = [t for t in taus if self.min_subseq_length <= len(t)//3 and len(t)//3 <= self.max_subseq_length]
 
     """
     Take a stored expert trajectory, convert it to the desired format
@@ -56,10 +60,9 @@ class TrajectoryDataset(torch.utils.data.Dataset):
         # save as .pt file at given save filepath
         torch.save(sorted_taus, "".join(self.filepath.split('.')[:-1]+["_converted.pt"]))
 
-
     def _convert_tau(self, tau):
         # check how many actions did happen within this trajectory
-        nr_steps = len(tau) / 3
+        nr_steps = len(tau) // 3
         # new trajectory as empty list
         full_tau = []
         # aggregator for return-to-go
@@ -84,6 +87,8 @@ class TrajectoryDataset(torch.utils.data.Dataset):
 
             # compute return to go for the next iteration
             returntogo += reward
+
+        return full_tau
 
     def _cut_tau(self, tau : list) -> [list]:
         cut_taus = []
