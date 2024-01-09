@@ -11,6 +11,6 @@ if False:
 
 #tds = TrajectoryDataset(5, 10, "Python\\dataset\\small.pt", needs_conversion=True)
 
-tds = TrajectoryDataset(6, 10, "Python\\dataset\\small_converted.pt")
+tds = TrajectoryDataset(5, 10, "Python\\dataset\\small_converted.pt")
 
 print("the end")

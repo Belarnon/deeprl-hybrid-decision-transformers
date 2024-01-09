@@ -9,8 +9,9 @@ import pyfiglet
 from safetensors.torch import save_file, load_file
 from tqdm import tqdm
 
-from ..dataset.trajectory_dataset import TrajectoryDataset
-from ..networks.decision_transformer import DecisionTransformer
+
+from dataset.trajectory_dataset import TrajectoryDataset
+from networks.decision_transformer import DecisionTransformer
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -28,7 +29,6 @@ def banner():
     print(pyfiglet.figlet_format("HDT", font="slant"))
 
 def parse_args():
-
     """
     state_dim,
     action_dim,
@@ -57,8 +57,6 @@ def parse_args():
                         help="The dimension of the action vector in the given dataset.", default=3)
     parser.add_argument("-maxeplen", "--max_ep_len", type=int,
                         help="The (inclusive) maximum length of ANY sequences to train on. This is used for the timestep embedding.", default=4096)
-    parser.add_argument("-aspc", "--act_space", type=(int,int,int),
-                        help="The action space for the embedding.", default=(3,10,10))
     parser.add_argument("-aenc", "--act_enc", type=bool,
                         help="Flag to indicate whether the actions should be one-hot encoded.", default=True)
     parser.add_argument("-hd", "--hidden_dim", type=int,
@@ -75,7 +73,7 @@ def parse_args():
     
     #   TRAINING ARGUMENTS
     parser.add_argument("-b", "--batch_size", type=int,
-                        help="The batch size to use for training.", default=4096)
+                        help="The batch size to use for training.", default=16)
     parser.add_argument("-e", "--epochs", type=int,
                         help="The number of epochs to train.", default=2)
     parser.add_argument("-lr", "--learning_rate", type=float,
@@ -91,9 +89,9 @@ def parse_args():
     parser.add_argument("-w", "--workers", type=int,
                         help="The number of workers to use for data loading.", default=0)
     parser.add_argument("-s", "--shuffle", type=bool,
-                        help="Shuffle the dataset before training.")
+                        help="Shuffle the dataset before training.", default=True)
     parser.add_argument("-v", "--verbose", type=bool,
-                        help="Enable verbose output.")
+                        help="Enable verbose output.", default=False)
     parser.add_argument("-gpu", "--use_gpu", type=bool,
                         help="Enable training on gpu device.", default=True)
     
@@ -103,9 +101,11 @@ def parse_args():
     parser.add_argument("-se", "--save_every", type=int,
                         help="Save the model every n epochs.", default=1)
 
-def find_best_device(no_gpu: bool = False) -> torch.device:
+    return parser.parse_args()
+
+def find_best_device(use_gpu: bool = False) -> torch.device:
     # Check if we should use the CPU
-    if no_gpu:
+    if not use_gpu:
         return torch.device('cpu')
 
     # Check if CUDA is available
@@ -127,14 +127,61 @@ def find_best_device(no_gpu: bool = False) -> torch.device:
 
     return device
 
-def training(args : argparse.Namespace):
+def encode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
+    """
+    Encodes actions into one-hot vectors.
+
+    action_batch: batch of action sequences
+    action_space: tuple of action space dimensions
+    """
+    
+    encoded_actions = torch.zeros(action_batch.shape[0], action_batch.shape[1], sum(action_space))
+
+    offset = [0] + list(action_space)[:-1]
+    for i, sequence in enumerate(action_batch):
+        for j, action in enumerate(sequence):
+            for k, a in enumerate(action):
+                encoded_actions[i, j, offset[k] + int(a)] = 1
+
+    return encoded_actions
+
+def decode_actions(actions_batch: torch.tensor, action_space=(3,10,10)):
+    """
+    Decodes one-hot action vectors into action sequences.
+
+    actions_batch: batch of action sequences
+    action_space: tuple of action space dimensions
+    """
+
+    decoded_actions = torch.zeros(actions_batch.shape[0], actions_batch.shape[1], len(action_space))
+
+    limits = np.insert(np.cumsum(list(action_space)), 0,0)
+    for i, sequence in enumerate(actions_batch):
+        for j, action in enumerate(sequence):
+            
+            act = torch.zeros(len(action_space))
+            for k in range(len(action_space)):
+                act[k] = action[limits[k]:limits[k+1]].argmax()
+
+            decoded_actions[i, j, :] = act
+
+    return decoded_actions
+
+def training():
+    # print banner and parse arguments
+    banner()
+    args = parse_args()
+
+    # find device to train on
+    device = find_best_device(args.use_gpu)
 
     # load dataset
     tds = TrajectoryDataset(
         args.min_seq_len,
         args.max_seq_len,
         args.dataset,
-        args.conversion
+        args.conversion,
+        device
     )
 
     # create dataloader
@@ -152,23 +199,20 @@ def training(args : argparse.Namespace):
         args.hidden_dim,
         args.max_seq_len,
         args.max_ep_len,
-        args.act_tanh,
-        args.act_space,
-        args.act_enc
+        args.act_tanh
     )
 
     if args.load_model:
         model.load_state_dict(load_file(args.load_model_dir))
         model.eval()
 
-    # setup optimizer, loss, device, 
+    # setup optimizer, loss 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer=optimizer,
         step_size=args.step_size,
         gamma=args.lr_decay
     )
-    device = find_best_device(args.gpu)
 
     # TODO how to define loss function?
     if args.loss_fn == "CE":
@@ -179,28 +223,28 @@ def training(args : argparse.Namespace):
         raise NotImplementedError(f"Unknown loss function {args.loss_fn}!")
 
     # start training loop
-    step, epoch_loss = 0, 0, 0
+    step, epoch_loss = 0, 0
 
     for epoch in tqdm(range(args.epochs), desc="Epochs", unit="epoch", leave=True, position=0):
         for batch in tqdm(dataloader, desc="Batches", unit="batch", leave=False, position=1):
 
-            # TODO how does batch data work with dictionaries?
             # Get data
-            states = batch['states'].to(device).squeeze()
-            actions = batch['actions'].to(device).squeeze()
-            rtg = batch['rtg'].to(device).squeeze()
-            timesteps = torch.linspace(0, args.max_ep_len, args.max_ep_len)
-            # TODO attention mask?
-            # attention_mask
+            states = batch[0].to(device).squeeze()
+            actions = batch[1].to(device).squeeze()
+            actions = encode_actions(actions) if args.act_enc else batch['actions']
+            #actions = actions.to(device).squeeze()
+            rtg = batch[2].to(device).unsqueeze(-1)
+            timesteps = batch[3].to(device).squeeze()
+            attention_mask = batch[4].to(device).squeeze()
 
             # reset gradients
             optimizer.zero_grad()
 
             # forward pass
-            output = model(states, actions, rtg, timesteps)
+            return_preds, state_preds, action_preds = model(states, actions, rtg, timesteps, attention_mask)
 
             # compute loss
-            loss = loss_fn(output)
+            loss = loss_fn(action_preds)
             epoch_loss += loss.item()
 
             # backprop
@@ -219,6 +263,4 @@ def training(args : argparse.Namespace):
     save_file(model.state_dict(), os.path.join(args.model_dir, f"model_final.safetensors"))
     
 if __name__=="__main__":
-    banner()
-    args = parse_args()
-    training(args)
+    training()

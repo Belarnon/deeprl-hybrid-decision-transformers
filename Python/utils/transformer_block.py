@@ -78,7 +78,7 @@ class TransformerBlock(nn.Module):
         heads (int): The number of attention heads.
         n_mlp (int): The number of mlp 'blocks'.
     """
-    def __init__(self, d: int, heads: int=8, n_mlp: int=4):
+    def __init__(self, d: int, heads: int=8, n_mlp: int=4, attention_mask: bool=False):
         super().__init__()
         
         # The self attention layer.
@@ -95,19 +95,19 @@ class TransformerBlock(nn.Module):
             nn.Linear(n_mlp*d, d)
         )
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, attention_mask: torch.tensor=None) -> torch.Tensor:
         """
         Args:
             x: The input embedding of shape [b, l, d].
+            attention_mask: The attention mask of shape [b, l, l].
             
         Returns:
             Transformer output tensor of shape [b, l, d].
         """
-        # Implement the forward pass as shown in the figure above.
-        #----------------
+        # Apply the self attention layer.
         out = self.attention(x) + x
         out = self.norm1(out)
         out = self.ff(out) + out
         out = self.norm2(out)
-        #----------------
+
         return out
