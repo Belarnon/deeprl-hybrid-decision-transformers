@@ -23,57 +23,81 @@ class TrajectoryGym():
         self.filepath = filepath
         self.ds_creator = TrajectoryDatasetCreator(filepath)
 
-        # call reset on environment to get the first state s_0 for the beginning
-        # of the dataset trajectory!
-        state = self.env.reset()[0] # state is list with array
-        self.ds_creator.addStartState(state)
+    def recording_loop(self, record_mistakes : bool = True):
+        """
+        this implements a session and a game loop
+        - a game goes from starting state until Game Over or End of Game (EOG) is called
+        - a session consists of several games
 
-    # while loop that only ends after the user gives an "end of game" EOG input
-    # or the program crashes
-    def recording_loop(self):
-        # start loop
+        if record_mistakes is set the mistakes are added to trajectories recorded
+        
+        IMPORTANT: client is responsible for calling finish_recording to save the data in the
+        dataset creator!
+        """
+        # start the session loop
         while True:
-            # wait for user input
-            user_action, is_recording = self.read_input()
-            #user_action, recording_stop = self.env.action_space.sample(), False
+            # call reset on environment to get the first state s_0 for the beginning
+            # of the dataset trajectory!
+            state = self.env.reset()[0] # state is list with array
+            self.ds_creator.addStartState(state)
 
-            # if the user stops the recording with the EOG
-            # finish the current trajectory and save the created dataset
-            if not is_recording: break
+            # start game loop
+            while True:
+                # wait for user input
+                user_action, recv_EOG, recv_EOS = self.read_input()
+                #user_action, recording_stop = self.env.action_space.sample(), False
 
-            # send action to environment, get observation
-            state, reward, is_done, info = self.env.step(user_action)
-            state = state[0]
-            #DEV_state_view = state[:100].reshape((10,10))
-            
-            # send observation to dataset creator to add to current trajectory
-            # TODO make decision: do we add "invalid" actions that do not alter
-            # the state since the block can not be placed at the chosen coordinates
-            # or an empty block has been chosen?? but the reward DOES consider those actions...
-            # -> currently we add every action to the trajectory
-            self.ds_creator.addStep(state, user_action, reward)
+                # if the user stops the recording with the EOG or EOS
+                # finish the current trajectory, deal with it in the session loop
+                if recv_EOG or recv_EOS: break
 
-            # check if a terminal state has been hit -> game over
-            # then we must invoke the stop of current trajectory recording and call finish trajectory
-            if is_done:
-                self.ds_creator.finishTrajectory()
-                state = self.env.reset()[0] # state is list with array
-                self.ds_creator.addStartState(state)
+                # otherwise the user_action is valid
+                # send action to environment, get observation
+                state, reward, is_done, info = self.env.step(user_action)
+                state = state[0]
+                
+                # if the input was a mistake (negative reward and is_done == False)
+                # check if we record those
+                if reward < 0 and not is_done:
+                    if record_mistakes:
+                        print("Mistake recorded!")
+                        self.ds_creator.addStep(state, user_action, reward)
+                    else:
+                        print("Mistake!")
+                # otherwise just add
+                else:
+                    self.ds_creator.addStep(state, user_action, reward)
 
-        # EOG has been given
-        if len(self.ds_creator.currentTrajectory) >= 2:
+                # check if a terminal state has been hit -> game over
+                # step out of the game loop
+                if is_done:
+                    print("Game Over")
+                    break
+
+            # EOG has been given or game over has been reached
+            # finish current trajectory
             self.ds_creator.finishTrajectory()
+            
+            # if EOS has been given, break out of the session loop
+            if recv_EOS: break
+            # otherwise reset the game and setup new trajectory
+            state = self.env.reset()[0] # state is list with array
+            self.ds_creator.addStartState(state)
+
+    def finish_recording(self):
         self.ds_creator.saveTrajectories()
 
 
-    def read_input(self) -> Tuple[List[int], bool]:
+    def read_input(self) -> Tuple[List[int], bool, bool]:
 
         # create input loop
         start_message = "input (format a x y) : "
         user_action = None
         is_valid_input = False
+        # flags for EOG and EOS
+        recv_EOG, recv_EOS = False, False
 
-        while (not is_valid_input):
+        while not is_valid_input:
 
             # get input from console
             user_input = input(start_message)
@@ -81,52 +105,54 @@ class TrajectoryGym():
             # delete leading and trailing whitespaces
             user_input = user_input.strip()
 
-            # EOG
-            if (user_input == 'EOG'):
-                # stop recording
+            # EOG and EOS
+            if user_input in ['EOG', 'EOS']:
+                # stop current loop as we received a valid input
+                # user_action is None and only the flags matter
                 user_action = None
                 is_valid_input = True
-                break
-            # valid input: "a x y"
-            # split by ' ' -> check if only 3 element
-                
-            # if not exactly 3 inputs are given or too much whitespaces
-            user_input = user_input.split(' ')
-            if len(user_input) != 3:
-                print(f"too much/few arguments were given! too much whitespaces are also invalid: {user_input}")
+                # set EOS/EOG flags
+                if user_input == 'EOG':
+                    recv_EOG = True
+                else:
+                    recv_EOS = True
+            # try to parse to valid input
             else:
-                # for each element delete leading and trailing whitespaces again
-                # also try to convert to int
-                try:
-                    a = int(user_input[0].strip()) # block index
-                    x = int(user_input[1].strip()) # column
-                    y = int(user_input[2].strip()) # row
-                # if something goes wrong, print not integers and break out
-                except:
-                    print(f"some inputs were not integers!: {user_input}")
-                    continue
-                
-                # check range
-                try:
-                    assert(0 <= a and a < self.nr_given_blocks)
-                    assert(0 <= x and x < self.gridsize)
-                    assert(0 <= y and y < self.gridsize)
-                # if an assertion fail, print 'wrong range'
-                except:
-                    print(f"some inputs were not in the valid range! {self.nr_given_blocks=}, {self.gridsize=}")
-                    continue
+                # valid input: "a x y"
+                # split by ' ' -> check if only 3 element
+                # if not exactly 3 inputs are given or too much whitespaces
+                user_input = user_input.split(' ')
+                if len(user_input) != 3:
+                    print(f"too much/few arguments were given! too much whitespaces are also invalid: {user_input}")
+                else:
+                    # for each element delete leading and trailing whitespaces again
+                    # also try to convert to int
+                    try:
+                        a = int(user_input[0].strip()) # block index
+                        x = int(user_input[1].strip()) # column
+                        y = int(user_input[2].strip()) # row
+                    # if something goes wrong, print not integers and break out
+                    except:
+                        print(f"some inputs were not integers!: {user_input}")
+                        continue
+                    
+                    # check range
+                    try:
+                        assert(0 <= a and a < self.nr_given_blocks)
+                        assert(0 <= x and x < self.gridsize)
+                        assert(0 <= y and y < self.gridsize)
+                    # if an assertion fail, print 'wrong range'
+                    except:
+                        print(f"some inputs were not in the valid range! {self.nr_given_blocks=}, {self.gridsize=}")
+                        continue
 
-                # if everything is ok, set user_action to tuple (a,x,y)
-                # set valid flag to true
-                user_action = [a,x,y]
-                is_valid_input = True
+                    # if everything is ok, set user_action to tuple (a,x,y)
+                    # set valid flag to true
+                    user_action = [a,x,y]
+                    is_valid_input = True
 
-        # output: EOG means valid input without user_action and is_recording set to false (-> stop recording)
-        # otherwise we return a vild user action with is_recording set to true (-> keep recording)
-        if user_action is None:
-            return None, False
-        else:
-            return user_action, True
+        # simply return user_action, recv_EOG, recv_EOS
+        return user_action, recv_EOG, recv_EOS
 
 class TrajectoryDatasetCreator():
     """
@@ -171,24 +197,31 @@ class TrajectoryDatasetCreator():
         return
 
 
-def main(filepath : str):
+def main(args : List[str]):
     # open connection to unity ml agent
     print("Waiting for Unity environment...")
     env = UnityEnvironment()
     env = UnityToGymWrapper(env, allow_multiple_obs=True)
     print("Unity environment started successfully!")
 
+    filepath = args[1]
+    record_mistakes = False
+    if len(args) == 3 and args[2] in ["True", "true", "t"]:
+        record_mistakes = True
+
     # create trajectory gym with this env
     # also give gridsize and nur of blocks
     traj_gym = TrajectoryGym(10, 3, env, filepath=filepath)
     # start recording loop
-    traj_gym.recording_loop()
+    traj_gym.recording_loop(record_mistakes)
     # after recording stopped for whatever reason, close environment
     env.close()
+    # finally call finish_recording to save the dataset
+    traj_gym.finish_recording()
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         print(sys.argv)
-        raise RuntimeError("missing filepath!")
-    main(sys.argv[1])
+        raise RuntimeError("Missing arguments! At least dataset path has to be given.")
+    main(sys.argv)
