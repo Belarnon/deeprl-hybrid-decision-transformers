@@ -51,6 +51,8 @@ def parse_args():
     
 
     # TRANSFORMER
+    def tuple_type(s):
+        return tuple(map(int, s.split(',')))
     parser.add_argument("-sdim", "--state_dim", type=int,
                         help="The dimension of the state vector in the given dataset.", default=175)
     parser.add_argument("-adim", "--act_dim", type=int,
@@ -59,6 +61,8 @@ def parse_args():
                         help="The (inclusive) maximum length of ANY sequences to train on. This is used for the timestep embedding.", default=4096)
     parser.add_argument("-aenc", "--act_enc", type=bool,
                         help="Flag to indicate whether the actions should be one-hot encoded.", default=True)
+    parser.add_argument("-aspc", "--act_space", type=tuple_type,
+                        help="The action space for the embedding if one-hot encoding is used.", default="3,10,10")
     parser.add_argument("-hd", "--hidden_dim", type=int,
                         help="The dimension of the embedding for the transformer.", default=128)
     parser.add_argument("-tanh", "--act_tanh", type=bool,
@@ -135,7 +139,7 @@ def encode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
     action_space: tuple of action space dimensions
     """
     
-    encoded_actions = torch.zeros(action_batch.shape[0], action_batch.shape[1], sum(action_space))
+    encoded_actions = torch.zeros(action_batch.shape[0], action_batch.shape[1], sum(action_space), device=action_batch.device)
 
     offset = [0] + list(action_space)[:-1]
     for i, sequence in enumerate(action_batch):
@@ -145,7 +149,7 @@ def encode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
 
     return encoded_actions
 
-def decode_actions(actions_batch: torch.tensor, action_space=(3,10,10)):
+def decode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
     """
     Decodes one-hot action vectors into action sequences.
 
@@ -153,10 +157,10 @@ def decode_actions(actions_batch: torch.tensor, action_space=(3,10,10)):
     action_space: tuple of action space dimensions
     """
 
-    decoded_actions = torch.zeros(actions_batch.shape[0], actions_batch.shape[1], len(action_space))
+    decoded_actions = torch.zeros(action_batch.shape[0], action_batch.shape[1], len(action_space), device=action_batch.device)
 
     limits = np.insert(np.cumsum(list(action_space)), 0,0)
-    for i, sequence in enumerate(actions_batch):
+    for i, sequence in enumerate(action_batch):
         for j, action in enumerate(sequence):
             
             act = torch.zeros(len(action_space))
@@ -193,14 +197,16 @@ def training():
     )
 
     # create transformer / load model
+    action_space = args.act_space if args.act_enc else None
+    action_dim = sum(action_space) if args.act_enc else args.act_dim
     model = DecisionTransformer(
         args.state_dim,
-        args.act_dim,
+        action_dim,
         args.hidden_dim,
         args.max_seq_len,
         args.max_ep_len,
         args.act_tanh
-    )
+    ).to(device)
 
     if args.load_model:
         model.load_state_dict(load_file(args.load_model_dir))
@@ -231,8 +237,7 @@ def training():
             # Get data
             states = batch[0].to(device).squeeze()
             actions = batch[1].to(device).squeeze()
-            actions = encode_actions(actions) if args.act_enc else batch['actions']
-            #actions = actions.to(device).squeeze()
+            actions = encode_actions(actions, action_space) if args.act_enc else actions
             rtg = batch[2].to(device).unsqueeze(-1)
             timesteps = batch[3].to(device).squeeze()
             attention_mask = batch[4].to(device).squeeze()
@@ -244,7 +249,7 @@ def training():
             return_preds, state_preds, action_preds = model(states, actions, rtg, timesteps, attention_mask)
 
             # compute loss
-            loss = loss_fn(action_preds)
+            loss = loss_fn(action_preds) # TODO: Define target for loss function xD, so it can be called like `loss_fn(y_hat, y)`
             epoch_loss += loss.item()
 
             # backprop
