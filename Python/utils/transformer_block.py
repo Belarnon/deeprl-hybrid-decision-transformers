@@ -24,10 +24,11 @@ class SelfAttention(nn.Module):
         # a single k-dimensional vector.
         self.unifyheads = nn.Linear(heads * d, d)
         
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, attention_mask: torch.Tensor=None) -> torch.Tensor:
         """
         Args:
             x: The input embedding of shape [b, l, d].
+            attention_mask: The attention mask of shape [b, l, l].
             
         Returns:
             Self attention tensor of shape [b, l, d].
@@ -47,6 +48,15 @@ class SelfAttention(nn.Module):
         #----------------
         w_prime = torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(d)
         #----------------
+
+        # Apply the attention mask.
+        if attention_mask is not None:
+            w_prime = w_prime.masked_fill(attention_mask == 0, -np.inf)
+        else:
+            # By default, only attend to the preceding elements.
+            indices = torch.triu_indices(l, l, offset=1) # returns a tuple of two tensors specifying row and column indices
+            w_prime[:, indices[0], indices[1]] = -np.inf
+
 
         # Compute w by normalizing w' over the last dimension.
         # Shape: [b*h, l, l]
@@ -78,7 +88,7 @@ class TransformerBlock(nn.Module):
         heads (int): The number of attention heads.
         n_mlp (int): The number of mlp 'blocks'.
     """
-    def __init__(self, d: int, heads: int=8, n_mlp: int=4, attention_mask: bool=False):
+    def __init__(self, d: int, heads: int=8, n_mlp: int=4):
         super().__init__()
         
         # The self attention layer.
@@ -105,7 +115,7 @@ class TransformerBlock(nn.Module):
             Transformer output tensor of shape [b, l, d].
         """
         # Apply the self attention layer.
-        out = self.attention(x) + x
+        out = self.attention(x, attention_mask) + x
         out = self.norm1(out)
         out = self.ff(out) + out
         out = self.norm2(out)
