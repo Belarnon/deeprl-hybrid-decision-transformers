@@ -1,7 +1,5 @@
-import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn.functional import one_hot
 
 from utils.transformer_block import TransformerBlock
 
@@ -14,7 +12,8 @@ class DecisionTransformer(nn.Module):
             hidden_dim=128, # aka embedding_dim
             max_length=None, # the number of timesteps to consider in the past
             max_episode_length=4096, # the maximum number of timesteps in an episode/trajectory
-            action_tanh=True
+            action_tanh=True,
+            **kwargs
             ):
         super().__init__()
 
@@ -22,11 +21,17 @@ class DecisionTransformer(nn.Module):
         self.action_dim = action_dim
         self.max_length = max_length
         self.hidden_dim = hidden_dim
-        
-        self.transformer = TransformerBlock(
-            self.hidden_dim,
-            heads=4,
-            n_mlp=2
+
+        # PyTorch's transformer encoder
+        self.transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=self.hidden_dim,
+                nhead=1,
+                dim_feedforward=4*self.hidden_dim,
+                dropout=0.1,
+                activation="relu"
+            ),
+            num_layers=3
         )
 
         self.embed_timestep = nn.Embedding(max_episode_length, self.hidden_dim)
@@ -48,6 +53,8 @@ class DecisionTransformer(nn.Module):
 
     def forward(self, states: torch.Tensor, actions: torch.Tensor, returns_to_go: torch.Tensor, timesteps: torch.Tensor, attention_mask: torch.Tensor=None):
         """
+        Perform a forward pass through the transformer.
+
         states: shape (batch_size, seq_length, state_dim)
         actions: shape (batch_size, seq_length, action_dim)
         returns_to_go: shape (batch_size, seq_length, 1)
@@ -83,16 +90,75 @@ class DecisionTransformer(nn.Module):
             (attention_mask, attention_mask, attention_mask), dim=1
         ).permute(0, 2, 1).reshape(batch_size, 3*seq_length)
 
-        # TODO: correctly use transformer (or use different transformer altogether, aka GPT2)
-        x = self.transformer(embeddings, attention_mask)
+        attention_mask = attention_mask.bool()
+        if len(attention_mask.shape) == 2: # nn.Transformer expects either a (l,l) or (b,l,l) mask, but can't handle (b,l) masks
+            attention_mask = attention_mask.unsqueeze(1).repeat(1, attention_mask.shape[1], 1) # broadcast attention vector to matrix (copy row-wise)
+
+        embeddings = embeddings.permute(1, 0, 2) # shape (3*seq_length, batch_size, hidden_dim), because nn.Transformer expects (l,b,d) (????????)
+        x = self.transformer(embeddings) # TODO: currently results in nan values if attention_mask is passed
+        x = x.permute(1, 0, 2) # shape (batch_size, 3*seq_length, hidden_dim)
 
         # reshape x to reverse the stacking & interleaving
+        # returns (0), states (1), or actions (2); i.e. x[:,1,t] is the token for s_t
         x = x.reshape(batch_size, seq_length, 3, self.hidden_dim).permute(0, 2, 1, 3)
 
         # get predictions
         return_preds = self.predict_return(x[:,2])  # predict next return given state and action
         state_preds = self.predict_state(x[:,2])    # predict next state given state and action
         action_preds = self.predict_action(x[:,1])  # predict next action given state
-        # the above comments were written by the original authors, but we are not sure if they are correct
+        # "given state and action"
+        # only gives action
+        # ???
+        # these comments are confusing, but they are from the original code, so...
 
         return return_preds, state_preds, action_preds
+    
+    def get_action(self, states: torch.Tensor, actions: torch.Tensor, returns_to_go: torch.Tensor, timesteps: torch.Tensor):
+        """
+        Get the action prediction for a given state, action, return, and timestep. Used for evaluation.
+
+        states: shape (batch_size=1, seq_length, state_dim)
+        actions: shape (batch_size=1, seq_length, action_dim)
+        returns_to_go: shape (batch_size=1, seq_length, 1)
+        timesteps: shape (batch_size=1, seq_length)
+        """
+
+        # Reshape inputs to fit the model in case batch_size != 1
+        # In that case, the sequences are simply concatenated along the batch dimension
+        states = states.reshape(1, -1, self.state_dim)
+        actions = actions.reshape(1, -1, self.action_dim)
+        returns_to_go = returns_to_go.reshape(1, -1, 1)
+        timesteps = timesteps.reshape(1, -1)
+
+        # Trim / add padding to the sequences to fit the model
+        if self.max_length is not None:
+            # Trim sequences to max_length
+            states = states[:, -self.max_length:]
+            actions = actions[:, -self.max_length:]
+            returns_to_go = returns_to_go[:, -self.max_length:]
+            timesteps = timesteps[:, -self.max_length:]
+
+            # Add left padding to the sequences
+            states = torch.cat(
+                (torch.zeros(states.shape[0], self.max_length - states.shape[1], self.state_dim, device=states.device), states),
+                dim=1).to(dtype=torch.float32)
+            actions = torch.cat(
+                (torch.zeros(actions.shape[0], self.max_length - actions.shape[1], self.action_dim, device=actions.device), actions),
+                dim=1).to(dtype=torch.float32)
+            returns_to_go = torch.cat(
+                (torch.zeros(returns_to_go.shape[0], self.max_length - returns_to_go.shape[1], 1, device=returns_to_go.device), returns_to_go),
+                dim=1).to(dtype=torch.float32)
+            timesteps = torch.cat(
+                (torch.zeros(timesteps.shape[0], self.max_length - timesteps.shape[1], device=timesteps.device), timesteps),
+                dim=1).to(dtype=torch.long) # Maybe we need to change this to int in the future :thinking:
+            attention_mask = torch.cat(
+                (torch.zeros(self.max_length - states.shape[1]), torch.ones(states.shape[1]))
+                ).to(dtype=torch.long, device=states.device).reshape(1, -1)
+        else:
+            attention_mask = None
+
+
+        # Perform a forward pass through the transformer.
+        _, _, action_preds = self.forward(states, actions, returns_to_go, timesteps)
+
+        return action_preds[0, -1] # return last action prediction
