@@ -35,9 +35,9 @@ namespace PKB.UI
 
         #region Internal State
 
-        private List<GameObject> blockPanels;
+        private List<GameObject> blockPanels = new();
 
-        private List<BlockRenderer> blockRenderers;
+        private List<BlockRenderer> blockRenderers = new();
 
         #endregion
 
@@ -46,7 +46,7 @@ namespace PKB.UI
         private void Awake()
         {
             CheckDependencies();
-            CreateBlockPanels();
+            ResetBlockPanels();
         }
 
         #endregion
