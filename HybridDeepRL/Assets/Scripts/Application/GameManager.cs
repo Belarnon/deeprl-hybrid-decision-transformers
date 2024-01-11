@@ -170,7 +170,7 @@ namespace PKB.App
         /// Returns the list of the currently available blocks for selection.
         /// </summary>
         /// <returns>The list of the currently available blocks for selection.</returns>
-        public List<BlockScriptableObject> GetAvailableBlocks()
+        public BlockScriptableObject[] GetAvailableBlocks()
         {
             return gameInstance.getGivenBlocks();
         }

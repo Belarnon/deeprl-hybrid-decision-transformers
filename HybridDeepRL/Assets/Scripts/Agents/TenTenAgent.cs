@@ -7,6 +7,7 @@ using Unity.MLAgents.Sensors;
 using Unity.MLAgents.Actuators;
 using PKB.App;
 using GameLogic;
+using Unity.MLAgents.Policies;
 
 namespace PBK.Agents
 {
@@ -43,6 +44,12 @@ namespace PBK.Agents
         private int maxPossibleScoreDelta = 0;
 
         private int numberOfAvailableBlocks = 0;
+        
+        private UserInput userInput;
+
+        private BehaviorParameters behaviorParameters;
+
+        private bool isHeuristicAgent = false;
 
         #endregion
 
@@ -51,9 +58,37 @@ namespace PBK.Agents
         private void Start()
         {
             CheckDependencies();
+            behaviorParameters = GetComponent<BehaviorParameters>();
+            isHeuristicAgent = IsHeuristicAgent();
             ComputeMaxPossibleScoreDelta();
+            numberOfAvailableBlocks = gameManager.GetNumberOfBlocksToSelect();
             gameManager.onGameStep.AddListener(OnGameStep);
             gameManager.onGameOver.AddListener(OnGameOver);
+        }
+
+        #endregion
+
+        #region Public Interface
+        
+        /// <summary>
+        /// Externally sets the user input to use in the next heuristic decision.
+        /// </summary>
+        /// <param name="blockIndex">The index of the block to place.</param>
+        /// <param name="position">The position to place the block at.</param>
+        public void SetUserInput(int blockIndex, Vector2Int position)
+        {
+            if (!isHeuristicAgent)
+            {
+                return;
+            }
+
+            userInput.blockIndex = blockIndex;
+            userInput.position = position;
+            userInput.hasUserInput = true;
+            
+            // We need to manually request a decision here, since the user input is not
+            // processed until processed by the heuristic decision.
+            RequestDecision();
         }
 
         #endregion
@@ -63,21 +98,20 @@ namespace PBK.Agents
         public override void OnEpisodeBegin()
         {
             ResetGame();
-            RequestDecision();
+            RequestDecisionIfNotHeuristic();
         }
 
         public override void CollectObservations(VectorSensor sensor)
         {
             bool[,] currentGrid = gameManager.GetCurrentPlacement();
             FillSensorWithGrid(sensor, currentGrid);
-            int selectableBlocks = gameManager.GetNumberOfBlocksToSelect();
-            List<BlockScriptableObject> availableBlocks = gameManager.GetAvailableBlocks();
-            numberOfAvailableBlocks = availableBlocks.Count;
-            for (int i = 0; i < selectableBlocks; i++)
+            BlockScriptableObject[] availableBlocks = gameManager.GetAvailableBlocks();
+            for (int i = 0; i < numberOfAvailableBlocks; i++)
             {
-                if (i < availableBlocks.Count)
+                BlockScriptableObject block = availableBlocks[i];
+                if (block != null)
                 {
-                    BlockScriptableObject block = availableBlocks[i];
+                    
                     FillSensorWithBlock(sensor, block);
                 }
                 else
@@ -89,20 +123,33 @@ namespace PBK.Agents
 
         public override void Heuristic(in ActionBuffers actionsOut)
         {
-            //base.Heuristic(actionsOut);
-            
+            ActionSegment<int> discreteActions = actionsOut.DiscreteActions;
+            if (userInput.hasUserInput)
+            {
+                discreteActions[0] = userInput.blockIndex;
+                discreteActions[1] = userInput.position.x;
+                discreteActions[2] = userInput.position.y;
+                userInput.hasUserInput = false;
+            }
+            else
+            {
+                discreteActions[0] = -1;
+                discreteActions[1] = -1;
+                discreteActions[2] = -1;
+            } 
         }
+
         public override void OnActionReceived(ActionBuffers actions)
         {
             int blockIndex = actions.DiscreteActions[0];
-            if (blockIndex >= numberOfAvailableBlocks)
-            {
-                SetReward(-0.001f);
-                RequestDecision();
-                return;
-            }
             int x = actions.DiscreteActions[1];
             int y = actions.DiscreteActions[2];
+            if (IsNopAction(blockIndex, x, y))
+            {
+                SetReward(0f);
+                RequestDecisionIfNotHeuristic();
+                return;
+            }
             bool success = gameManager.AttemptPutBlock(blockIndex, new Vector2Int(x, y));
             if (success)
             {
@@ -112,7 +159,7 @@ namespace PBK.Agents
             else
             {
                 SetReward(-0.001f);
-                RequestDecision();
+                RequestDecisionIfNotHeuristic();
             }
         }
 
@@ -122,7 +169,7 @@ namespace PBK.Agents
 
         public void OnGameStep()
         {
-            RequestDecision();
+            RequestDecisionIfNotHeuristic();
         }
 
         public void OnGameOver()
@@ -183,6 +230,38 @@ namespace PBK.Agents
             float normalizedScoreDelta = (float)delta / maxPossibleScoreDelta;
             lastScore = score;
             return normalizedScoreDelta;
+        }
+        
+        /// <summary>
+        /// Checks if the given action is a no-op (contains a negative value).
+        /// </summary>
+        /// <param name="blockIndex">The index of the block to place.</param>
+        /// <param name="x">The x-coordinate of the position to place the block at.</param>
+        /// <param name="y">The y-coordinate of the position to place the block at.</param>
+        /// <returns>True if the action is a no-op, false otherwise.</returns>
+        private static bool IsNopAction(int blockIndex, int x, int y)
+        {
+            return blockIndex < 0 || x < 0 || y < 0;
+        }
+
+        private bool IsHeuristicAgent()
+        {
+            return behaviorParameters.BehaviorType == BehaviorType.HeuristicOnly;
+        }
+
+        private void RequestDecisionIfNotHeuristic()
+        {
+            if (!isHeuristicAgent)
+            {
+                RequestDecision();
+            }
+        }
+
+        private struct UserInput
+        {
+            public bool hasUserInput;
+            public int blockIndex;
+            public Vector2Int position;
         }
 
         #endregion
