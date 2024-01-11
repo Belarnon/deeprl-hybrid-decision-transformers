@@ -524,8 +524,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: PKB.App.GameManager, PKB.App
-        m_MethodName: ResetGame
+        m_TargetAssemblyTypeName: PBK.Agents.TenTenAgent, PKB.Agents
+        m_MethodName: MarkAndEndEpisode
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -551,6 +551,7 @@ GameObject:
   - component: {fileID: 3489144945315706734}
   - component: {fileID: 1581933935859271767}
   - component: {fileID: 7099121104986772091}
+  - component: {fileID: 2733987336512893896}
   - component: {fileID: 4044961608825879187}
   m_Layer: 5
   m_Name: DebugUI
@@ -600,8 +601,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: PKB.App.GameManager, PKB.App
-        m_MethodName: PutBlock
+        m_TargetAssemblyTypeName: PBK.Agents.TenTenAgent, PKB.Agents
+        m_MethodName: SetUserInput
         m_Mode: 0
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -721,6 +722,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   button: {fileID: 3760138556775976117}
   key: 13
+--- !u!114 &2733987336512893896
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5842739405178211993}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 46a10a6765c4e21428fb5164ce78dd47, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  button: {fileID: 3760138556775976117}
+  key: 271
 --- !u!114 &4044961608825879187
 MonoBehaviour:
   m_ObjectHideFlags: 0

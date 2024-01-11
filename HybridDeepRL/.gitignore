@@ -73,4 +73,6 @@ crashlytics-build.properties
 
 # Custom stuff
 /[Aa]ssets/[Rr]ecordings/
+/[Aa]ssets/[Rr]ecordings.meta
 /[Aa]ssets/[Dd]emonstrations/
+/[Aa]ssets/[Dd]emonstrations.meta
