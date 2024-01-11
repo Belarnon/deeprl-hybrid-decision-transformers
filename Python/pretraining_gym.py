@@ -203,7 +203,8 @@ def training():
     # start training loop
     step, epoch_loss = 0, 0
 
-    for epoch in tqdm(range(args.epochs), desc="Epochs", unit="epoch", leave=True, position=0):
+    epoch_progress = tqdm(range(args.epochs), desc="Epochs", unit="epoch", leave=True, position=0)
+    for epoch in epoch_progress:
         for batch in tqdm(dataloader, desc="Batches", unit="batch", leave=False, position=1):
 
             # Get data
@@ -214,6 +215,8 @@ def training():
             timesteps = batch[3].to(device).squeeze()
             attention_mask = batch[4].to(device).squeeze()
 
+            actions_target = torch.clone(actions)
+
             # reset gradients
             optimizer.zero_grad()
 
@@ -221,8 +224,9 @@ def training():
             return_preds, state_preds, action_preds = model(states, actions, rtg, timesteps, attention_mask)
 
             # compute loss
-            loss = loss_fn(action_preds) # TODO: Define target for loss function xD, so it can be called like `loss_fn(y_hat, y)`
+            loss = loss_fn(action_preds, actions_target)
             epoch_loss += loss.item()
+            epoch_progress.set_postfix({"loss": loss.item()})
 
             # backprop
             loss.backward()

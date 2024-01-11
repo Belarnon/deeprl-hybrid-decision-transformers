@@ -12,17 +12,17 @@ class SelfAttention(nn.Module):
         d: The embedding dimension.
         heads: The number of attention heads.
     """
-    def __init__(self, d: int, heads: int=8):
+    def __init__(self, d: int, n_head: int=8):
         super().__init__()
-        self.h = heads
+        self.h = n_head
         
-        self.Wq = nn.Linear(d, d * heads, bias=False)
-        self.Wk = nn.Linear(d, d * heads, bias=False)
-        self.Wv = nn.Linear(d, d * heads, bias=False)
+        self.Wq = nn.Linear(d, d * n_head, bias=False)
+        self.Wk = nn.Linear(d, d * n_head, bias=False)
+        self.Wv = nn.Linear(d, d * n_head, bias=False)
         
         # This unifies the outputs of the different heads into 
         # a single k-dimensional vector.
-        self.unifyheads = nn.Linear(heads * d, d)
+        self.unifyheads = nn.Linear(n_head * d, d)
         
     def forward(self, x: torch.Tensor, attention_mask: torch.Tensor=None) -> torch.Tensor:
         """
@@ -91,11 +91,11 @@ class TransformerBlock(nn.Module):
         heads (int): The number of attention heads.
         n_mlp (int): The number of mlp 'blocks'.
     """
-    def __init__(self, d: int, heads: int=8, n_mlp: int=4):
+    def __init__(self, d: int, n_head: int=4, n_mlp: int=4):
         super().__init__()
         
         # The self attention layer.
-        self.attention = SelfAttention(d, heads=heads)
+        self.attention = SelfAttention(d, n_head=n_head)
         
         # The two layer norms.
         self.norm1 = nn.LayerNorm(d)
