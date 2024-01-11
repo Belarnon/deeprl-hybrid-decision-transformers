@@ -45,6 +45,8 @@ namespace PBK.Agents
         private int maxPossibleScoreDelta = 0;
 
         private int numberOfAvailableBlocks = 0;
+
+        private bool gameIsOver = false;
         
         private UserInput userInput;
 
@@ -90,6 +92,15 @@ namespace PBK.Agents
             // We need to manually request a decision here, since the user input is not
             // processed until processed by the heuristic decision.
             RequestDecision();
+        }
+
+        /// <summary>
+        /// Sets the currently recorded trajectory as ended and terminates the episode.
+        /// </summary>
+        public void MarkAndEndEpisode()
+        {
+            MarkTrajectoryEnd();
+            EndEpisode();
         }
 
         #endregion
@@ -154,6 +165,14 @@ namespace PBK.Agents
                 return;
             }
             bool success = gameManager.AttemptPutBlock(blockIndex, new Vector2Int(x, y));
+            if (gameIsOver)
+            {
+                SetReward(-1f);
+                CommitAction(actions);
+                CommitReward(GetCumulativeReward());
+                MarkAndEndEpisode();
+                return;
+            }
             if (success)
             {
                 float reward = ComputeScoreReward(gameManager.GetCurrentScore());
@@ -179,9 +198,7 @@ namespace PBK.Agents
 
         public void OnGameOver()
         {
-            SetReward(-1f);
-            CommitReward(GetCumulativeReward());
-            MarkAndEndEpisode();
+            gameIsOver = true;
         }
 
         #endregion
@@ -197,6 +214,7 @@ namespace PBK.Agents
         {
             gameManager.ResetGame();
             lastScore = 0;
+            gameIsOver = false;
         }
 
         private static void FillSensorWithGrid(VectorSensor sensor, bool[,] grid)
@@ -261,12 +279,6 @@ namespace PBK.Agents
             {
                 RequestDecision();
             }
-        }
-
-        private void MarkAndEndEpisode()
-        {
-            MarkTrajectoryEnd();
-            EndEpisode();
         }
 
         private struct UserInput

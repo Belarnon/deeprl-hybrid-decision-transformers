@@ -47,6 +47,7 @@ namespace PKB.Recording
         #region Internal State
 
         private bool hasUnfinishedTrajectory = false;
+        private bool finalObservationCollected = false;
 
         #endregion
 
@@ -83,7 +84,7 @@ namespace PKB.Recording
                 Debug.LogWarning("Marking the start of a trajectory while another one is still unfinished. Marking the end of the previous trajectory.");
                 MarkTrajectoryEnd();
             }
-            hasUnfinishedTrajectory = true;
+            SetTrajectoryBeginState();
             OnTrajectoryStarted?.Invoke();
         }
 
@@ -92,8 +93,9 @@ namespace PKB.Recording
         /// </summary>
         protected void MarkTrajectoryEnd()
         {
-            if (!TrajectoryStarted())
+            if (!hasUnfinishedTrajectory)
             {
+                Debug.LogWarning("Marking the end of a trajectory while none has been started. Doing nothing.");
                 return;
             }
             hasUnfinishedTrajectory = false;
@@ -106,7 +108,7 @@ namespace PKB.Recording
         /// <param name="sensor">The sensor to commit.</param>
         protected void CommitObservation(VectorSensor sensor)
         {
-            if (!TrajectoryStarted())
+            if (!CanCommitObservation())
             {
                 return;
             }
@@ -119,7 +121,7 @@ namespace PKB.Recording
         /// <param name="actionBuffers">The action buffers to commit.</param>
         protected void CommitAction(ActionBuffers actionBuffers)
         {
-            if (!TrajectoryStarted())
+            if (!CanCommitAction())
             {
                 return;
             }
@@ -132,7 +134,7 @@ namespace PKB.Recording
         /// <param name="reward">The reward to commit.</param>
         protected void CommitReward(float reward)
         {
-            if (!TrajectoryStarted())
+            if (!CanCommitReward())
             {
                 return;
             }
@@ -143,15 +145,51 @@ namespace PKB.Recording
 
         #region Helpers
 
-        private bool TrajectoryStarted()
+        private void SetTrajectoryBeginState()
+        {
+            hasUnfinishedTrajectory = true;
+            finalObservationCollected = false;
+        }
+
+        private bool CanCommitObservation()
+        {
+            if (hasUnfinishedTrajectory)
+            {
+                return true;
+            }
+            if (finalObservationCollected)
+            {
+                Debug.LogError("Committing an observation while no trajectory is started or the final observation has already been collected. Doing nothing.");
+                return false;
+            }
+            else
+            {
+                finalObservationCollected = true;
+                return true;
+            }
+        }
+
+        private bool CanCommitAction()
         {
             if (!hasUnfinishedTrajectory)
+            
             {
-                Debug.LogError("Trying to perform an action on a trajectory that has not been started.");
+                Debug.LogError("Committing an action while no trajectory is started.");
                 return false;
             }
             return true;
         }
+
+        private bool CanCommitReward()
+        {
+            if (!hasUnfinishedTrajectory)
+            {
+                Debug.LogError("Committing a reward while no trajectory is started.");
+                return false;
+            }
+            return true;
+        }
+
 
         #endregion
     }

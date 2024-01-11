@@ -433,11 +433,11 @@ PrefabInstance:
       objectReference: {fileID: 6379919548200370772}
     - target: {fileID: 6952750012175224255, guid: 3f21fce006d793b4db28d80a3856e2a1, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: EndEpisode
+      value: MarkAndEndEpisode
       objectReference: {fileID: 0}
     - target: {fileID: 6952750012175224255, guid: 3f21fce006d793b4db28d80a3856e2a1, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
-      value: Unity.MLAgents.Agent, Unity.ML-Agents
+      value: PBK.Agents.TenTenAgent, PKB.Agents
       objectReference: {fileID: 0}
     - target: {fileID: 7164724734164840296, guid: 3f21fce006d793b4db28d80a3856e2a1, type: 3}
       propertyPath: m_AnchorMax.y

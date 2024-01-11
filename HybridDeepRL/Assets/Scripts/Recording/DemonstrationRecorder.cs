@@ -45,6 +45,8 @@ namespace PKB.Recording
         private Transition currentTransition;
         private TransitionFillState currentTransitionFillState = new();
 
+        private bool trajectoryShouldEnd = false;
+
         #endregion
 
         #region Unity Lifecycle
@@ -72,8 +74,16 @@ namespace PKB.Recording
                 agentToRecord.OnActionSelected.RemoveListener(OnActionSelected);
                 agentToRecord.OnRewardReceived.RemoveListener(OnRewardReceived);
                 agentToRecord.OnTrajectoryEnded.RemoveListener(OnTrajectoryEnded);
-
+                AddUnfinishedTrajectory();
                 SaveRecord();
+            }
+        }
+
+        private void AddUnfinishedTrajectory()
+        {
+            if (currentTrajectory != null)
+            {
+                recordToWrite.trajectories.Add(currentTrajectory);
             }
         }
 
@@ -84,6 +94,8 @@ namespace PKB.Recording
         private void OnTrajectoryStarted()
         {
             currentTrajectory = new();
+            currentTransition = null;
+            currentTransitionFillState.Reset();
         }
 
         private void OnObservationCollected(VectorSensor sensor)
@@ -91,6 +103,10 @@ namespace PKB.Recording
             EnsureTranitionExists();
             currentTransition.observation = SensorUtils.GetObservationVector(sensor);
             currentTransitionFillState.SetObservationFilled();
+            if (LazyEndTrajectory())
+            {
+                return;
+            }
             AddTransitionIfFilled();
         }
 
@@ -112,7 +128,7 @@ namespace PKB.Recording
 
         private void OnTrajectoryEnded()
         {
-            recordToWrite.trajectories.Add(currentTrajectory);
+            trajectoryShouldEnd = true;
         }
 
         #endregion
@@ -139,13 +155,32 @@ namespace PKB.Recording
             }
         }
 
+        /// <summary>
+        /// Ends the current trajectory if it should end.
+        /// </summary>
+        /// <remarks>
+        /// This is needed as ML-Agents actually sends one last observation, action, and reward after the episode has ended.
+        /// </remarks>
+        private bool LazyEndTrajectory()
+        {
+            if (trajectoryShouldEnd && currentTransitionFillState.ObservationFilled)
+            {
+                trajectoryShouldEnd = false;
+                recordToWrite.trajectories.Add(currentTrajectory);
+                return true;
+            }
+            return false;
+        }
+
         private static Action CreateActionFromActionBuffer(ActionBuffers actionBuffers)
         {
             int numDiscreteActions = actionBuffers.DiscreteActions.Length;
             int numContinuousActions = actionBuffers.ContinuousActions.Length;
-            Action action = new();
-            action.discreteActions = new int[numDiscreteActions];
-            action.continuousActions = new float[numContinuousActions];
+            Action action = new()
+            {
+                discreteActions = new int[numDiscreteActions],
+                continuousActions = new float[numContinuousActions]
+            };
             for (int i = 0; i < numDiscreteActions; i++)
             {
                 action.discreteActions[i] = actionBuffers.DiscreteActions[i];
