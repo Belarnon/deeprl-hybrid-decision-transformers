@@ -6,6 +6,7 @@ using Unity.MLAgents;
 using Unity.MLAgents.Sensors;
 using Unity.MLAgents.Actuators;
 using PKB.App;
+using PKB.Recording;
 using GameLogic;
 using Unity.MLAgents.Policies;
 
@@ -15,7 +16,7 @@ namespace PBK.Agents
     /// <summary>
     /// The <see cref="TenTenAgent"/> implements the ML-Agents API for the 1010! game.
     /// </summary>
-    public class TenTenAgent : Agent
+    public class TenTenAgent : RecordableAgent
     {
 
         #region Inspector Interface
@@ -99,6 +100,7 @@ namespace PBK.Agents
         {
             ResetGame();
             RequestDecisionIfNotHeuristic();
+            MarkTrajectoryStart();
         }
 
         public override void CollectObservations(VectorSensor sensor)
@@ -119,6 +121,7 @@ namespace PBK.Agents
                     FillSensorWithEmptyBlock(sensor);
                 }
             }
+            CommitObservation(sensor);
         }
 
         public override void Heuristic(in ActionBuffers actionsOut)
@@ -161,6 +164,8 @@ namespace PBK.Agents
                 SetReward(-0.001f);
                 RequestDecisionIfNotHeuristic();
             }
+            CommitAction(actions);
+            CommitReward(GetCumulativeReward());
         }
 
         #endregion
@@ -175,7 +180,8 @@ namespace PBK.Agents
         public void OnGameOver()
         {
             SetReward(-1f);
-            EndEpisode();
+            CommitReward(GetCumulativeReward());
+            MarkAndEndEpisode();
         }
 
         #endregion
@@ -255,6 +261,12 @@ namespace PBK.Agents
             {
                 RequestDecision();
             }
+        }
+
+        private void MarkAndEndEpisode()
+        {
+            MarkTrajectoryEnd();
+            EndEpisode();
         }
 
         private struct UserInput
