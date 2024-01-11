@@ -1,7 +1,5 @@
-import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn.functional import one_hot
 
 from utils.transformer_block import TransformerBlock
 
@@ -14,7 +12,8 @@ class DecisionTransformer(nn.Module):
             hidden_dim=128, # aka embedding_dim
             max_length=None, # the number of timesteps to consider in the past
             max_episode_length=4096, # the maximum number of timesteps in an episode/trajectory
-            action_tanh=True
+            action_tanh=True,
+            **kwargs
             ):
         super().__init__()
 
@@ -22,11 +21,17 @@ class DecisionTransformer(nn.Module):
         self.action_dim = action_dim
         self.max_length = max_length
         self.hidden_dim = hidden_dim
-        
-        self.transformer = TransformerBlock(
-            self.hidden_dim,
-            heads=4,
-            n_mlp=2
+
+        # PyTorch's transformer encoder
+        self.transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=self.hidden_dim,
+                nhead=1,
+                dim_feedforward=4*self.hidden_dim,
+                dropout=0.1,
+                activation="relu"
+            ),
+            num_layers=3
         )
 
         self.embed_timestep = nn.Embedding(max_episode_length, self.hidden_dim)
@@ -85,8 +90,13 @@ class DecisionTransformer(nn.Module):
             (attention_mask, attention_mask, attention_mask), dim=1
         ).permute(0, 2, 1).reshape(batch_size, 3*seq_length)
 
-        # TODO: correctly use transformer (or use different transformer altogether, aka GPT2)
-        x = self.transformer(embeddings, attention_mask)
+        attention_mask = attention_mask.bool()
+        if len(attention_mask.shape) == 2: # nn.Transformer expects either a (l,l) or (b,l,l) mask, but can't handle (b,l) masks
+            attention_mask = attention_mask.unsqueeze(1).repeat(1, attention_mask.shape[1], 1) # broadcast attention vector to matrix (copy row-wise)
+
+        embeddings = embeddings.permute(1, 0, 2) # shape (3*seq_length, batch_size, hidden_dim), because nn.Transformer expects (l,b,d) (????????)
+        x = self.transformer(embeddings) # TODO: currently results in nan values if attention_mask is passed
+        x = x.permute(1, 0, 2) # shape (batch_size, 3*seq_length, hidden_dim)
 
         # reshape x to reverse the stacking & interleaving
         # returns (0), states (1), or actions (2); i.e. x[:,1,t] is the token for s_t
