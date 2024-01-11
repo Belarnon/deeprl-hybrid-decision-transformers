@@ -101,8 +101,9 @@ class TrajectoryDataset(Dataset):
         nr_steps = len(tau) // 3
         # new trajectory as empty list
         tau_t = []
-        # aggregator for return-to-go
-        returntogo = 0
+        # final cumulative reward to compute return-to-go
+        # should be last element in a sequence
+        final_cum_reward = tau[-1]
 
         # iterate from last!! state to first state, so it is easier to compute the return-to-go
         # each packet has (state, action, reward)
@@ -110,19 +111,11 @@ class TrajectoryDataset(Dataset):
             shifted_idx = 3*i
             state = tau[shifted_idx]
             action = tau[shifted_idx + 1]
-            reward = tau[shifted_idx + 2]
-
-            # split state into grid and blocks
-            #grid_flat, b1_flat, b2_flat, b3_flat = state[:100], state[100:125], state[125:150], state[150:]
-
-            # create state as list of these flattend grids
-            #state_ = [grid_flat, b1_flat, b2_flat, b3_flat]
+            cum_reward = tau[shifted_idx + 2]
+            returntogo = cum_reward - final_cum_reward
 
             # add to beginning of the new tau
             tau_t = [state, action, returntogo] + tau_t
-
-            # compute return to go for the next iteration
-            returntogo += reward
 
         # add timesteps array to tau!
         tau_t = [tau_t, np.linspace(0, nr_steps-1, nr_steps)]

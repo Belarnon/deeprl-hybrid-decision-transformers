@@ -10,9 +10,9 @@ from safetensors.torch import save_file, load_file
 from tqdm import tqdm
 
 
-from dataset.trajectory_dataset import TrajectoryDataset
-from networks.decision_transformer import DecisionTransformer
-from utils.setup_methods import find_best_device
+from Python.dataset.trajectory_dataset import TrajectoryDataset
+from Python.networks.decision_transformer import DecisionTransformer
+from Python.utils.training_utils import find_best_device, encode_actions, decode_actions
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -102,46 +102,6 @@ def parse_args():
                         help="Save the model every n epochs.", default=1)
 
     return parser.parse_args()
-
-def encode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
-    """
-    Encodes actions into one-hot vectors.
-
-    action_batch: batch of action sequences
-    action_space: tuple of action space dimensions
-    """
-    
-    encoded_actions = torch.zeros(action_batch.shape[0], action_batch.shape[1], sum(action_space), device=action_batch.device)
-
-    offset = [0] + list(action_space)[:-1]
-    for i, sequence in enumerate(action_batch):
-        for j, action in enumerate(sequence):
-            for k, a in enumerate(action):
-                encoded_actions[i, j, offset[k] + int(a)] = 1
-
-    return encoded_actions
-
-def decode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
-    """
-    Decodes one-hot action vectors into action sequences.
-
-    actions_batch: batch of action sequences
-    action_space: tuple of action space dimensions
-    """
-
-    decoded_actions = torch.zeros(action_batch.shape[0], action_batch.shape[1], len(action_space), device=action_batch.device)
-
-    limits = np.insert(np.cumsum(list(action_space)), 0,0)
-    for i, sequence in enumerate(action_batch):
-        for j, action in enumerate(sequence):
-            
-            act = torch.zeros(len(action_space))
-            for k in range(len(action_space)):
-                act[k] = action[limits[k]:limits[k+1]].argmax()
-
-            decoded_actions[i, j, :] = act
-
-    return decoded_actions
 
 def training():
     # print banner and parse arguments

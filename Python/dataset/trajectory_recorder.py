@@ -6,8 +6,9 @@ from mlagents_envs.envs.unity_gym_env import UnityToGymWrapper
 
 from typing import List, Tuple
 
-class TrajectoryGym():
+class TrajectoryRecorder():
     """
+    DEPRECATED DEPRECATED DEPRECATED
     This class is used to record trajectories from a Unity environment.
     It allows the user to record expert trajectories by playing the game
     and saving the trajectories to a file. These trajectories can then be
@@ -211,7 +212,7 @@ def main(args : List[str]):
 
     # create trajectory gym with this env
     # also give gridsize and nur of blocks
-    traj_gym = TrajectoryGym(10, 3, env, filepath=filepath)
+    traj_gym = TrajectoryRecorder(10, 3, env, filepath=filepath)
     # start recording loop
     traj_gym.recording_loop(record_mistakes)
     # after recording stopped for whatever reason, close environment
