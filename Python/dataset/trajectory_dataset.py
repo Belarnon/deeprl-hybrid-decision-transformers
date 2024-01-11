@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import json
 from torch.utils.data import Dataset
 
 class TrajectoryDataset(Dataset):
@@ -33,7 +34,30 @@ class TrajectoryDataset(Dataset):
         else:
             self._load()
     
+    def _readJSON(self) -> list:
+        # read in file
+        with open(file=self.filepath) as file:
+            taus_json = json.load(file)
+
+        taus = []
+        # convert to correct format
+        for t in taus_json['trajectories']:
+            tau = []
+            # t = [ { "obs" : <>, "act" : <>, "rwd" : <>}, ..]
+            #nr_steps = len(t)# // 3
+            for step in t:
+                tau += [step['observation'], step['action'], step['reward']]
+            # append to expert_trajectories
+            taus += [tau]
+        
+        return taus
+
+    
     def _load(self):
+        """
+        We assume that the file has already been brought into the .pt file!!
+        Otherwise call _load_convert_save() for JSON files to first convert
+        """
         tau_ts = torch.load(self.filepath)
         # leave out seqs that are shorter or longer than provided min/max_subseq_length
         self.expert_trajectories = [t for t in tau_ts if self.min_subseq_length <= len(t[0])//3 and len(t[0])//3 <= self.max_subseq_length]
@@ -44,8 +68,17 @@ class TrajectoryDataset(Dataset):
     then save again to save on computation!
     """
     def _load_convert_save(self):
+
         # load raw trajectories form filepath
-        raw_trajectories = torch.load(self.filepath)
+        # check if given file has .json or .pt file ending
+        # should only be json but hey, you never know..
+        file_ending = self.filepath.split('.')[-1]
+        if file_ending == 'json':
+            raw_trajectories = self._readJSON()
+        elif file_ending == 'pt':
+            raw_trajectories = torch.load(self.filepath)
+        else:
+            raise NotImplementedError(f"File ending is unknown! {file_ending}")
         
         # iterate over all trajectories and convert to subsequences
         for tau in raw_trajectories:
@@ -54,9 +87,6 @@ class TrajectoryDataset(Dataset):
         
             # add to expert trajectories
             self.expert_trajectories += cut_tau_ts
-
-        # sort by length?
-        #sorted_taus = sorted(self.expert_trajectories, key = lambda x: len(x))
 
         # save as .pt file at given save filepath
         torch.save(self.expert_trajectories, "".join(self.filepath.split('.')[:-1]+["_converted.pt"]))
