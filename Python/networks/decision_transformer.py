@@ -46,7 +46,7 @@ class DecisionTransformer(nn.Module):
         self.predict_state = nn.Linear(hidden_dim, self.state_dim)
 
 
-    def forward(self, states: torch.tensor, actions: torch.tensor, returns_to_go: torch.tensor, timesteps: torch.tensor, attention_mask: torch.tensor=None):
+    def forward(self, states: torch.Tensor, actions: torch.Tensor, returns_to_go: torch.Tensor, timesteps: torch.Tensor, attention_mask: torch.Tensor=None):
         """
         states: shape (batch_size, seq_length, state_dim)
         actions: shape (batch_size, seq_length, action_dim)
@@ -62,11 +62,6 @@ class DecisionTransformer(nn.Module):
             attention_mask = torch.ones((batch_size, seq_length), dtype=torch.long).to(states.device)
 
         # embed each modality with a different head
-        
-        wa söllemer als timesteps übergeh? sinds ez nur die vode einzelne steps oder vode max_episode_length?
-        schaltet sie s'nögste mol ii bi 10vor10 und findends use
-        als spezialgast de jumbo schreiner wo es schnitzel isst.
-
         timestep_embeddings = self.embed_timestep(timesteps) # shape (batch_size, seq_length, hidden_dim)
         action_embeddings = self.embed_action(actions)
         state_embeddings = self.embed_state(states)

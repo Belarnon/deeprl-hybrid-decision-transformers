@@ -51,7 +51,10 @@ class SelfAttention(nn.Module):
 
         # Apply the attention mask.
         if attention_mask is not None:
-            w_prime = w_prime.masked_fill(attention_mask == 0, -np.inf)
+            if len(attention_mask.shape) == 2:
+                attention_mask = attention_mask.unsqueeze(1).repeat(1, l, 1) # broadcast attention vector to matrix (copy row-wise)
+            attention_mask = attention_mask.repeat_interleave(h, dim=0) # copy each attention matrix h times, since we have b*h weight matrices now
+            w_prime[attention_mask==0] = -np.inf
         else:
             # By default, only attend to the preceding elements.
             indices = torch.triu_indices(l, l, offset=1) # returns a tuple of two tensors specifying row and column indices
@@ -105,7 +108,7 @@ class TransformerBlock(nn.Module):
             nn.Linear(n_mlp*d, d)
         )
     
-    def forward(self, x: torch.Tensor, attention_mask: torch.tensor=None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, attention_mask: torch.Tensor=None) -> torch.Tensor:
         """
         Args:
             x: The input embedding of shape [b, l, d].

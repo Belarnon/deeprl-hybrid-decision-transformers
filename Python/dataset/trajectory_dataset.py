@@ -144,7 +144,7 @@ class TrajectoryDataset(Dataset):
         return len(self.expert_trajectories)
     
     
-    def __getitem__(self, idx: int) -> np.ndarray:
+    def __getitem__(self, idx: int) -> list:
         # get trajectory with timesteps and separate
         tau, timesteps = self.expert_trajectories[idx]
 
@@ -160,5 +160,11 @@ class TrajectoryDataset(Dataset):
         rtg = np.concatenate([np.zeros(pad_steps), tau[2::3]])
         timesteps = np.concatenate([np.zeros(pad_steps), timesteps])
         attention_mask = np.concatenate([np.zeros(pad_steps), np.ones(nr_steps)])
+
+        states = torch.from_numpy(states).float()
+        actions = torch.from_numpy(actions).float()
+        rtg = torch.from_numpy(rtg).float()
+        timesteps = torch.from_numpy(timesteps).int()
+        attention_mask = torch.from_numpy(attention_mask).int()
 
         return [states, actions, rtg, timesteps, attention_mask]
