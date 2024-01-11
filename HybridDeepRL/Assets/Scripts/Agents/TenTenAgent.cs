@@ -6,6 +6,7 @@ using Unity.MLAgents;
 using Unity.MLAgents.Sensors;
 using Unity.MLAgents.Actuators;
 using PKB.App;
+using PKB.Recording;
 using GameLogic;
 using Unity.MLAgents.Policies;
 
@@ -15,7 +16,7 @@ namespace PBK.Agents
     /// <summary>
     /// The <see cref="TenTenAgent"/> implements the ML-Agents API for the 1010! game.
     /// </summary>
-    public class TenTenAgent : Agent
+    public class TenTenAgent : RecordableAgent
     {
 
         #region Inspector Interface
@@ -44,6 +45,8 @@ namespace PBK.Agents
         private int maxPossibleScoreDelta = 0;
 
         private int numberOfAvailableBlocks = 0;
+
+        private bool gameIsOver = false;
         
         private UserInput userInput;
 
@@ -91,6 +94,15 @@ namespace PBK.Agents
             RequestDecision();
         }
 
+        /// <summary>
+        /// Sets the currently recorded trajectory as ended and terminates the episode.
+        /// </summary>
+        public void MarkAndEndEpisode()
+        {
+            MarkTrajectoryEnd();
+            EndEpisode();
+        }
+
         #endregion
 
         #region Unity ML-Agents API
@@ -99,6 +111,7 @@ namespace PBK.Agents
         {
             ResetGame();
             RequestDecisionIfNotHeuristic();
+            MarkTrajectoryStart();
         }
 
         public override void CollectObservations(VectorSensor sensor)
@@ -119,6 +132,7 @@ namespace PBK.Agents
                     FillSensorWithEmptyBlock(sensor);
                 }
             }
+            CommitObservation(sensor);
         }
 
         public override void Heuristic(in ActionBuffers actionsOut)
@@ -151,6 +165,14 @@ namespace PBK.Agents
                 return;
             }
             bool success = gameManager.AttemptPutBlock(blockIndex, new Vector2Int(x, y));
+            if (gameIsOver)
+            {
+                SetReward(-1f);
+                CommitAction(actions);
+                CommitReward(GetCumulativeReward());
+                MarkAndEndEpisode();
+                return;
+            }
             if (success)
             {
                 float reward = ComputeScoreReward(gameManager.GetCurrentScore());
@@ -161,6 +183,8 @@ namespace PBK.Agents
                 SetReward(-0.001f);
                 RequestDecisionIfNotHeuristic();
             }
+            CommitAction(actions);
+            CommitReward(GetCumulativeReward());
         }
 
         #endregion
@@ -174,8 +198,7 @@ namespace PBK.Agents
 
         public void OnGameOver()
         {
-            SetReward(-1f);
-            EndEpisode();
+            gameIsOver = true;
         }
 
         #endregion
@@ -191,6 +214,7 @@ namespace PBK.Agents
         {
             gameManager.ResetGame();
             lastScore = 0;
+            gameIsOver = false;
         }
 
         private static void FillSensorWithGrid(VectorSensor sensor, bool[,] grid)
