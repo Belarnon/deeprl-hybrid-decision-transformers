@@ -200,6 +200,11 @@ def training():
         loss_fn = lambda y_hat, y: torch.mean((y_hat - y)**2)
     else:
         raise NotImplementedError(f"Unknown loss function {args.loss_fn}!")
+    
+    print("Waiting for Unity environment...")
+    env = UnityEnvironment()
+    env = UnityToGymWrapper(env, allow_multiple_obs=True)
+    print("Unity environment started successfully! Starting training...")
 
     # start training loop
     global_step = 0
@@ -263,10 +268,7 @@ def training():
     save_file(model.state_dict(), os.path.join(args.model_dir, "model_final.safetensors"))
 
     # evaluate model
-    print("Waiting for Unity environment...")
-    env = UnityEnvironment()
-    env = UnityToGymWrapper(env, allow_multiple_obs=True)
-    print("Unity environment started successfully! Evaluating model...")
+    print("Evaluating model...")
     
     episode_return, episode_length = evaluate_episode_rtg(
         env,
