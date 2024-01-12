@@ -164,3 +164,6 @@ results/
 python_playground/
 models/
 dataset/test_data/
+
+# WandB files
+wandb/
