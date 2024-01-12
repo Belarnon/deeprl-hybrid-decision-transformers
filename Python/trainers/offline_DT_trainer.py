@@ -51,6 +51,8 @@ def parse_args():
                         help="The (inclusive) minimum length of sequences to train on.", required=True)
     parser.add_argument("-maxlen", "--max_seq_len", type=int,
                         help="The (inclusive) maximum length of sequences to train on.", required=True)
+    parser.add_argument("-stride", "--stride", type=int,
+                        help="The stride to use for the sliding window.", default=1)
     
 
     # TRANSFORMER
@@ -141,9 +143,8 @@ def training():
     tds = TrajectoryDataset(
         args.min_seq_len,
         args.max_seq_len,
-        args.dataset,
-        args.conversion,
-        device
+        args.stride,
+        args.dataset
     )
 
     # after loading the dataset, check for the maximum sequence length
@@ -215,12 +216,12 @@ def training():
         for batch in tqdm(dataloader, desc="Batches", unit="batch", leave=False, position=1):
 
             # Get data
-            states = batch[0].to(device).squeeze()
-            actions = batch[1].to(device).squeeze()
+            states = batch[0].to(device)
+            actions = batch[1].to(device)
             actions = encode_actions(actions, action_space) if args.act_enc else actions
-            rtg = batch[2].to(device).unsqueeze(-1)
-            timesteps = batch[3].to(device).squeeze()
-            attention_mask = batch[4].to(device).squeeze()
+            rtg = batch[2].to(device)
+            timesteps = batch[3].to(device)
+            attention_mask = batch[4].to(device)
 
             actions_target = torch.clone(actions)
 
