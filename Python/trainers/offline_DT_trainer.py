@@ -114,11 +114,10 @@ def setup_wandb(args: argparse.Namespace) -> None:
     Set up Weights and Biases for logging.
     """
     arg_dict = vars(args)
-    
+
     wandb.init(
         project="DeepLearning-HDT",
-        name="Debugging Run",
-        id=f"debugging_run_{wandb.util.generate_id()}",
+        name=f"debugging_run_{wandb.util.generate_id()}",
         notes="This is a debugging run that can later be deleted.",
         tags=["debug", "offline"],
         config=arg_dict
