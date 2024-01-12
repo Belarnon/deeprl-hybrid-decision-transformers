@@ -40,7 +40,8 @@ class TrajectoryDataset(Dataset):
             raise NotImplementedError(f"File ending is unknown! {file_ending}")
     
         # get list of trajectories, where every trajectory is a list of transitions
-        self.taus = [t['transitions'] for t in taus_json]
+        # remove empty trajectories
+        self.taus = [t['transitions'] for t in taus_json if len(t['transitions']) != 0]
         # get lengths of trajectories
         self.taus_lengths = [len(t) for t in self.taus]
         # adjust max_subseq_len by maximum possible sequence
@@ -85,7 +86,7 @@ class TrajectoryDataset(Dataset):
         # nested for-loop iteration over lookuptable row-wise to find traj and seq len
         for i in range(len(self.taus)):
             if is_finished: break
-            for j in range(len(self.taus_lengths)):
+            for j in range(self.max_subseq_length - self.min_subseq_length + 1):
                 # get number of trajectories for this tau and seqlen
                 # if inter_idx is bigger than it, subtract number of sequences and go on
                 # else the inter_idx is the index of th subseq for the tau and subseq len
@@ -109,8 +110,8 @@ class TrajectoryDataset(Dataset):
         subseq = tau[start_idx:end_idx]
 
         # convert tau from json format to separate arrays
-        state_dim = len(tau[0]['observations'])
-        action_dim = len(tau[0]['actions']['discreteActions'])
+        state_dim = len(tau[0]['observation'])
+        action_dim = len(tau[0]['action']['discreteActions'])
         reward_dim = 1 if type(tau[0]['reward']) is float else len(tau[0]['reward'])
 
         states = np.zeros((seq_len, state_dim))
@@ -118,11 +119,11 @@ class TrajectoryDataset(Dataset):
         rewards = np.zeros((seq_len, reward_dim))
 
         # iterate BACKWARDS over subseq and fill arrays
-        target_rtg = subseq[seq_len-1]['reward']
+        target_rtg = subseq[-1]['reward']
         # return to go: take last reward and subtract from every reward to get return-to-go
         for i in range(seq_len-1, -1, -1):
-            states[i] = subseq[i]['observations']
-            actions[i] = subseq[i]['actions']['discreteActions']
+            states[i] = subseq[i]['observation']
+            actions[i] = subseq[i]['action']['discreteActions']
             rewards[i] = subseq[i]['reward'] - target_rtg
 
         #pad from left with zeros to max_subseq_length
