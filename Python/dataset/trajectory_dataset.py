@@ -23,7 +23,7 @@ class TrajectoryDataset(Dataset):
 
     """
 
-    def __init__(self, min_subseq_length : int, max_subseq_length : int, stride : int, filepath : str, needs_conversion : bool = False, device = None):
+    def __init__(self, min_subseq_length : int, max_subseq_length : int, stride : int, filepath : str):
         self.min_subseq_length = min_subseq_length
         # max is set later!
         #self.max_subseq_length = max_subseq_length
@@ -49,13 +49,13 @@ class TrajectoryDataset(Dataset):
         # compute number of all subsequences and fill LookUp-Table for number
         # of subsequences for each sequence and length
         self.LUT = self._compute_subseq_LUT()
-        self.total_nr_subseq =  self.LUT.sum()
+        self.total_nr_subseq =  int(self.LUT.sum())
 
     def _compute_subseq_LUT(self) -> np.ndarray:
         # compute number of different subsequence lengths
-        nr_subseq_lengths = self.max_subseq_length - self.min_subseq_length - 1
+        nr_subseq_lengths = self.max_subseq_length - self.min_subseq_length + 1
         # create table with dim = (nr_taus, nr_subseq_lengths)
-        lookuptable = np.zeros((len(self.taus), nr_subseq_lengths))
+        lookuptable = np.zeros((len(self.taus), nr_subseq_lengths), dtype=int)
         
         # iterate over all trajectory lengths
         for i, tau_len in enumerate(self.taus_lengths):
@@ -97,19 +97,20 @@ class TrajectoryDataset(Dataset):
                     is_finished = True
                     break
 
-        # get computed tau and seq length 
-        tau, seq_len = self.taus[tau_idx], self.taus_lengths[seqlen_idx]
+        # get computed tau and seq length
+        # seq_len is min_seq_len + index
+        tau, seq_len = self.taus[tau_idx], self.min_subseq_length + seqlen_idx
 
         # use inter_idx to get starting index using the stride
         # also compute end index
         start_idx = inter_idx * self.stride
         end_idx = start_idx + seq_len
         # get subsequence from tau
-        subseq = tau[start_idx:]
+        subseq = tau[start_idx:end_idx]
 
         # convert tau from json format to separate arrays
-        state_dim = len(tau[0]['observation'])
-        action_dim = len(tau[0]['action']['discreteActions'])
+        state_dim = len(tau[0]['observations'])
+        action_dim = len(tau[0]['actions']['discreteActions'])
         reward_dim = 1 if type(tau[0]['reward']) is float else len(tau[0]['reward'])
 
         states = np.zeros((seq_len, state_dim))
@@ -120,8 +121,8 @@ class TrajectoryDataset(Dataset):
         target_rtg = subseq[seq_len-1]['reward']
         # return to go: take last reward and subtract from every reward to get return-to-go
         for i in range(seq_len-1, -1, -1):
-            states[i] = subseq[i]['observation']
-            actions[i] = subseq[i]['action']['discreteActions']
+            states[i] = subseq[i]['observations']
+            actions[i] = subseq[i]['actions']['discreteActions']
             rewards[i] = subseq[i]['reward'] - target_rtg
 
         #pad from left with zeros to max_subseq_length
@@ -129,7 +130,7 @@ class TrajectoryDataset(Dataset):
 
         states = np.concatenate([np.zeros((pad_steps, state_dim)), states])
         actions = np.concatenate([np.zeros((pad_steps, action_dim)), actions])
-        rewards = np.concatenate([np.zeros(pad_steps), rewards])
+        rewards = np.concatenate([np.zeros((pad_steps, reward_dim)), rewards])
         attention_mask = np.concatenate([np.zeros(pad_steps), np.ones(seq_len)])
 
         states = torch.from_numpy(states).float()
