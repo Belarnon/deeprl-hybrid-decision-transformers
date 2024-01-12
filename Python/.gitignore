@@ -161,4 +161,5 @@ cython_debug/
 
 # Custom ML-Agents files
 results/
-python_playground
+python_playground/
+models/
