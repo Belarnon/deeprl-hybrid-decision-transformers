@@ -126,17 +126,22 @@ class TrajectoryDataset(Dataset):
             actions[i] = subseq[i]['action']['discreteActions']
             rewards[i] = subseq[i]['reward'] - target_rtg
 
+        # timesteps
+        timesteps = np.linspace(1, seq_len, seq_len)
+
         #pad from left with zeros to max_subseq_length
         pad_steps = self.max_subseq_length - seq_len
 
         states = np.concatenate([np.zeros((pad_steps, state_dim)), states])
         actions = np.concatenate([np.zeros((pad_steps, action_dim)), actions])
         rewards = np.concatenate([np.zeros((pad_steps, reward_dim)), rewards])
+        timesteps = np.concatenate([np.zeros(pad_steps), timesteps])
         attention_mask = np.concatenate([np.zeros(pad_steps), np.ones(seq_len)])
 
         states = torch.from_numpy(states).float()
         actions = torch.from_numpy(actions).float()
         rewards = torch.from_numpy(rewards).float()
+        timesteps = torch.from_numpy(timesteps).int()
         attention_mask = torch.from_numpy(attention_mask).int()
 
-        return [states, actions, rewards, attention_mask]
+        return [states, actions, rewards, timesteps, attention_mask]
