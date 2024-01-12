@@ -45,10 +45,11 @@ class TrajectoryDataset(Dataset):
             tau = []
             # t = [ { "obs" : <>, "act" : <>, "rwd" : <>}, ..]
             #nr_steps = len(t)# // 3
-            for step in t:
-                tau += [step['observation'], step['action'], step['reward']]
-            # append to expert_trajectories
-            taus += [tau]
+            for step in t['transitions']:
+                tau += [step['observation'], step['action']['discreteActions'], step['reward']]
+            # append to expert_trajectories if not empty
+            if len(tau) > 0:
+                taus += [tau]
         
         return taus
 

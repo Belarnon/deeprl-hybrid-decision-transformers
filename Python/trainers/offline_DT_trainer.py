@@ -10,9 +10,9 @@ from safetensors.torch import save_file, load_file
 from tqdm import tqdm
 
 
-from Python.dataset.trajectory_dataset import TrajectoryDataset
-from Python.networks.decision_transformer import DecisionTransformer
-from Python.utils.training_utils import find_best_device, encode_actions, decode_actions
+from dataset.trajectory_dataset import TrajectoryDataset
+from networks.decision_transformer import DecisionTransformer
+from utils.training_utils import find_best_device, encode_actions, decode_actions
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -152,7 +152,6 @@ def training():
         gamma=args.lr_decay
     )
 
-    # TODO how to define loss function?
     if args.loss_fn == "CE":
         loss_fn = torch.nn.CrossEntropyLoss()
     elif args.loss_fn == "MSE":
