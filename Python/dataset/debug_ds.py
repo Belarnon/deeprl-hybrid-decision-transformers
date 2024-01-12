@@ -9,8 +9,6 @@ if False:
         raw_data = raw_data[:-1]
         torch.save(raw_data, "Python\\dataset\\small.pt")
 
-#tds = TrajectoryDataset(5, 10, "Python\\dataset\\small.pt", needs_conversion=True)
-
-tds = TrajectoryDataset(5, 10, "Python\\dataset\\small_converted.pt")
+tds = TrajectoryDataset(1, 4096, "HybridDeepRL/Assets/Recordings/demonstration.json", True)
 
 print("the end")

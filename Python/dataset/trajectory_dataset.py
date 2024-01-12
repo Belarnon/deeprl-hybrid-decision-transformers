@@ -45,10 +45,11 @@ class TrajectoryDataset(Dataset):
             tau = []
             # t = [ { "obs" : <>, "act" : <>, "rwd" : <>}, ..]
             #nr_steps = len(t)# // 3
-            for step in t:
-                tau += [step['observation'], step['action'], step['reward']]
-            # append to expert_trajectories
-            taus += [tau]
+            for step in t['transitions']:
+                tau += [step['observation'], step['action']['discreteActions'], step['reward']]
+            # append to expert_trajectories if not empty
+            if len(tau) > 0:
+                taus += [tau]
         
         return taus
 
@@ -61,6 +62,10 @@ class TrajectoryDataset(Dataset):
         tau_ts = torch.load(self.filepath)
         # leave out seqs that are shorter or longer than provided min/max_subseq_length
         self.expert_trajectories = [t for t in tau_ts if self.min_subseq_length <= len(t[0])//3 and len(t[0])//3 <= self.max_subseq_length]
+        # set max_subseq_len to the maximal sequence length in expert_trajectories
+        # to prevent unnecessary padding!
+        self.max_subseq_length = len( max(self.expert_trajectories, key=len))
+
 
     """
     Take a stored expert trajectory, convert it to the desired format

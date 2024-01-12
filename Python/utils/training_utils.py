@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 def find_best_device(use_gpu: bool = False) -> torch.device:
     # Check if we should use the CPU
