@@ -164,3 +164,4 @@ results/
 python_playground/
 models/
 dataset/test_data/
+HybridDeepRL/Assets/ML-Agents/Timers/*
