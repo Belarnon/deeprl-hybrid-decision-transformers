@@ -120,6 +120,9 @@ def training():
         device
     )
 
+    # after loading the dataset, check for the maximum sequence length
+    dataset_max_seq_len = tds.max_subseq_length
+
     # create dataloader
     dataloader = DataLoader(
         dataset=tds,
@@ -129,13 +132,15 @@ def training():
     )
 
     # create transformer / load model
+    # max sequence length has to be that of the dataset, which
+    # was checked above
     action_space = args.act_space if args.act_enc else None
     action_dim = sum(action_space) if args.act_enc else args.act_dim
     model = DecisionTransformer(
         args.state_dim,
         action_dim,
         args.hidden_dim,
-        args.max_seq_len,
+        dataset_max_seq_len,
         args.max_ep_len,
         args.act_tanh
     ).to(device)
