@@ -1,0 +1,256 @@
+{
+    "trajectories" : [
+        {
+            "transitions" : [
+                {
+                    "observations" : [0, 0, 0, 0],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 0]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [0, 0, 0, 1],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 1]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [0, 0, 0, 2],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 2]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [0, 0, 0, 3],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 3]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [0, 0, 0, 4],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 4]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [0, 0, 0, 5],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 5]
+                    },
+                    "reward" : 0.1
+                }
+            ]
+        },
+        {
+            "transitions" : [
+                {
+                    "observations" : [1, 0, 0, 0],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 0]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 1],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 1]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 2],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 2]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 3],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 3]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 4],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 4]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 5],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 5]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 6],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 6]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 7],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 7]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 8],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 8]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 9],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 9]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 10],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 10]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 11],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 11]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 12],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 12]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 13],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 13]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [1, 0, 0, 14],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 14]
+                    },
+                    "reward" : 0.1
+                }
+            ]
+        },
+        {
+            "transitions" : [
+                {
+                    "observations" : [2, 0, 0, 0],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 0]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [2, 0, 0, 1],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 1]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [2, 0, 0, 2],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 2]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [2, 0, 0, 3],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 3]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [2, 0, 0, 4],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 4]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [2, 0, 0, 5],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 5]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [2, 0, 0, 6],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 6]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [2, 0, 0, 7],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 7]
+                    },
+                    "reward" : 0.1
+                },
+                {
+                    "observations" : [2, 0, 0, 8],
+                    "actions" : {
+                        "continuousActions" : [],
+                        "discreteActions" : [1, 8]
+                    },
+                    "reward" : 0.1
+                }
+            ]
+        }
+    ]
+}
