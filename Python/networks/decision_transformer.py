@@ -35,9 +35,33 @@ class DecisionTransformer(nn.Module):
             num_layers=3
         )
 
+        # Define CNN layers for grid and blocks preprocessing
+        self.grid_cnn = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1),  # Assuming grid is a single channel input, shape (batch_size, 16, grid_size, grid_size)
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2), # shape (batch_size, 16, grid_size/2, grid_size/2)
+            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1), # shape (batch_size, 32, grid_size/2, grid_size/2)
+            nn.ReLU(),
+            nn.Flatten()
+        ) # output shape: (batch_size, 32*(grid_size/2)*(grid_size/2))
+
+        self.block_cnn = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1),  # Assuming each block is a single channel input, shape (batch_size, 16, block_size, block_size)
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2), # shape (batch_size, 16, block_size/2, block_size/2)
+            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1), # shape (batch_size, 32, block_size/2, block_size/2)
+            nn.ReLU(),
+            nn.Flatten()
+        ) # output shape: (batch_size, 32*(block_size/2)*(block_size/2))
+
+        self.grid_size = kwargs.get("grid_size", 10)
+        self.block_size = kwargs.get("block_size", 5)
+        convd_state_dim = 32 * ((self.grid_size//2)**2 + 3*(self.block_size//2)**2)
+ 
+        # Define linear layers
         self.embed_timestep = nn.Embedding(max_episode_length, self.hidden_dim)
         self.embed_action = nn.Linear(self.action_dim, self.hidden_dim)
-        self.embed_state = nn.Linear(self.state_dim, self.hidden_dim)
+        self.embed_state = nn.Linear(convd_state_dim, self.hidden_dim)
         self.embed_return = nn.Linear(1, self.hidden_dim)
 
         self.embed_ln = nn.LayerNorm(self.hidden_dim)
@@ -69,10 +93,25 @@ class DecisionTransformer(nn.Module):
             # attention mask for GPT: 1 if can be attended to, 0 if not
             attention_mask = torch.ones((batch_size, seq_length), dtype=torch.long).to(states.device)
 
+        # get grid and block states
+        grid_size_squared = self.grid_size*self.grid_size
+        block_size_squared = self.block_size*self.block_size
+        grid_states = states[:, :, :grid_size_squared].reshape(batch_size * seq_length, 1, self.grid_size, self.grid_size)
+        block_states_1 = states[:, :, grid_size_squared:grid_size_squared+block_size_squared].reshape(batch_size * seq_length, 1, self.block_size, self.block_size)
+        block_states_2 = states[:, :, grid_size_squared+block_size_squared:grid_size_squared+2*block_size_squared].reshape(batch_size * seq_length, 1, self.block_size, self.block_size)
+        block_states_3 = states[:, :, -block_size_squared:].reshape(batch_size * seq_length, 1, self.block_size, self.block_size)
+
+        # embed grid and block states
+        grid_features = self.grid_cnn(grid_states).reshape(batch_size, seq_length, -1)
+        block_features_1 = self.block_cnn(block_states_1).reshape(batch_size, seq_length, -1)
+        block_features_2 = self.block_cnn(block_states_2).reshape(batch_size, seq_length, -1)
+        block_features_3 = self.block_cnn(block_states_3).reshape(batch_size, seq_length, -1)
+        combined_states_features = torch.cat((grid_features, block_features_1, block_features_2, block_features_3), dim=-1)
+
         # embed each modality with a different head
         timestep_embeddings = self.embed_timestep(timesteps) # shape (batch_size, seq_length, hidden_dim)
         action_embeddings = self.embed_action(actions)
-        state_embeddings = self.embed_state(states)
+        state_embeddings = self.embed_state(combined_states_features)
         return_embeddings = self.embed_return(returns_to_go)
 
         # time embeddings are treated similar to positional embeddings
