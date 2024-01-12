@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import wandb
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -108,10 +109,27 @@ def parse_args():
 
     return parser.parse_args()
 
+def setup_wandb(args: argparse.Namespace) -> None:
+    """
+    Set up Weights and Biases for logging.
+    """
+    arg_dict = vars(args)
+
+    wandb.init(
+        project="DeepLearning-HDT",
+        name=f"debugging_run_{wandb.util.generate_id()}",
+        notes="This is a debugging run that can later be deleted.",
+        tags=["debug", "offline"],
+        config=arg_dict
+    )
+
 def training():
     # print banner and parse arguments
     banner()
     args = parse_args()
+
+    # setup wandb
+    setup_wandb(args)
 
     # find device to train on
     device = find_best_device(args.use_gpu)
@@ -181,10 +199,11 @@ def training():
         raise NotImplementedError(f"Unknown loss function {args.loss_fn}!")
 
     # start training loop
-    step, epoch_loss = 0, 0
-
+    global_step = 0
     epoch_progress = tqdm(range(args.epochs), desc="Epochs", unit="epoch", leave=True, position=0)
     for epoch in epoch_progress:
+        epoch_loss = 0
+        epoch_step = 0
         for batch in tqdm(dataloader, desc="Batches", unit="batch", leave=False, position=1):
 
             # Get data
@@ -215,7 +234,20 @@ def training():
             # backprop
             loss.backward()
             optimizer.step()
-            step += 1
+            epoch_step += 1
+
+        global_step += epoch_step
+
+        # log metrics
+        epoch_loss /= epoch_step
+        log_config = {
+            "epoch": epoch,
+            "epoch_step": epoch_step,
+            "global_step": global_step,
+            "train/epoch_loss": epoch_loss,
+            "train/learning_rate": scheduler.get_last_lr()[0]
+        }
+        wandb.log(log_config, step=global_step)
 
         # save model after some epocds
         if epoch % args.save_every == 0:
