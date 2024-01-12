@@ -64,7 +64,7 @@ class TrajectoryDataset(Dataset):
         self.expert_trajectories = [t for t in tau_ts if self.min_subseq_length <= len(t[0])//3 and len(t[0])//3 <= self.max_subseq_length]
         # set max_subseq_len to the maximal sequence length in expert_trajectories
         # to prevent unnecessary padding!
-        self.max_subseq_length = len( max(self.expert_trajectories, key=len))
+        self.max_subseq_length = len( max(self.expert_trajectories, key=lambda x: len(x[0]))[0])
 
 
     """

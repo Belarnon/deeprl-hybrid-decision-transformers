@@ -9,7 +9,6 @@ import pyfiglet
 from safetensors.torch import save_file, load_file
 from tqdm import tqdm
 
-
 from dataset.trajectory_dataset import TrajectoryDataset
 from networks.decision_transformer import DecisionTransformer
 from utils.training_utils import find_best_device, encode_actions, decode_actions
