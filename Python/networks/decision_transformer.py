@@ -158,6 +158,7 @@ class DecisionTransformer(nn.Module):
 
 
         # Perform a forward pass through the transformer.
-        _, _, action_preds = self.forward(states, actions, returns_to_go, timesteps)
+        _, _, action_preds = self.forward(states, actions, returns_to_go, timesteps, attention_mask)
 
+        # Return last action prediction
         return action_preds[0, -1] # return last action prediction

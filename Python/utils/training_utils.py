@@ -47,7 +47,7 @@ def decode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
     """
     Decodes one-hot action vectors into action sequences.
 
-    actions_batch: batch of action sequences
+    action_batch: batch of action sequences, shape (batch_size, seq_length, sum(action_space))
     action_space: tuple of action space dimensions
     """
 

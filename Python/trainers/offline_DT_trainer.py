@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import wandb
 from torch import nn
@@ -10,13 +9,17 @@ import pyfiglet
 from safetensors.torch import save_file, load_file
 from tqdm import tqdm
 
+from mlagents_envs.environment import UnityEnvironment
+from mlagents_envs.envs.unity_gym_env import UnityToGymWrapper
+
 import transformers
 from transformers.models.decision_transformer.modeling_decision_transformer import DecisionTransformerOutput
 
 from dataset.trajectory_dataset import TrajectoryDataset
-from networks.decision_transformer import DecisionTransformer
-from utils.training_utils import find_best_device, encode_actions, decode_actions
+from evaluation.evaluate_episodes import evaluate_episode_rtg
 from modules.loss.action_crossentropy import TenTenActionLoss
+from networks.decision_transformer import DecisionTransformer
+from utils.training_utils import find_best_device, encode_actions
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -258,6 +261,29 @@ def training():
 
     # save final model and optimizer
     save_file(model.state_dict(), os.path.join(args.model_dir, "model_final.safetensors"))
+
+    # evaluate model
+    print("Waiting for Unity environment...")
+    env = UnityEnvironment()
+    env = UnityToGymWrapper(env, allow_multiple_obs=True)
+    print("Unity environment started successfully! Evaluating model...")
+    
+    episode_return, episode_length = evaluate_episode_rtg(
+        env,
+        args.state_dim,
+        action_dim,
+        model,
+        args.max_ep_len,
+        scale=1000.,
+        state_mean=0.,
+        state_std=1.,
+        device=device,
+        target_return=3.,
+        mode='normal',
+        action_space=action_space,
+    )
+
+    print(f"Average return: {episode_return}, average length: {episode_length}")
     
 if __name__=="__main__":
     training()
