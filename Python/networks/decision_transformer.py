@@ -29,7 +29,7 @@ class DecisionTransformer(nn.Module):
                 nhead=1,
                 dim_feedforward=4*self.hidden_dim,
                 dropout=0.1,
-                activation="relu"
+                activation="gelu"
             ),
             num_layers=3
         )

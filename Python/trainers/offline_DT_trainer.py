@@ -9,6 +9,9 @@ import pyfiglet
 from safetensors.torch import save_file, load_file
 from tqdm import tqdm
 
+import transformers
+from transformers.models.decision_transformer.modeling_decision_transformer import DecisionTransformerOutput
+
 from dataset.trajectory_dataset import TrajectoryDataset
 from networks.decision_transformer import DecisionTransformer
 from utils.training_utils import find_best_device, encode_actions, decode_actions
@@ -48,6 +51,8 @@ def parse_args():
     # TRANSFORMER
     def tuple_type(s):
         return tuple(map(int, s.split(',')))
+    parser.add_argument("-hugtrans", "--hugging_transformer", type=bool,
+                        help="Flag to indicate whether the huggingface transformer should be used.", default=False)
     parser.add_argument("-sdim", "--state_dim", type=int,
                         help="The dimension of the state vector in the given dataset.", default=175)
     parser.add_argument("-adim", "--act_dim", type=int,
@@ -135,14 +140,25 @@ def training():
     # was checked above
     action_space = args.act_space if args.act_enc else None
     action_dim = sum(action_space) if args.act_enc else args.act_dim
-    model = DecisionTransformer(
-        args.state_dim,
-        action_dim,
-        args.hidden_dim,
-        dataset_max_seq_len,
-        args.max_ep_len,
-        args.act_tanh
-    ).to(device)
+    if args.hugging_transformer:
+        config = transformers.DecisionTransformerConfig(
+            state_dim=args.state_dim,
+            act_dim=action_dim,
+            hidden_dim=args.hidden_dim,
+            max_ep_len=args.max_ep_len,
+            action_tanh=args.act_tanh
+        )
+        model = transformers.DecisionTransformerModel(config).to(device)
+    else:
+        model = DecisionTransformer(
+            args.state_dim,
+            action_dim,
+            args.hidden_dim,
+            dataset_max_seq_len,
+            args.max_ep_len,
+            args.act_tanh
+        ).to(device)
+
 
     if args.load_model:
         model.load_state_dict(load_file(args.load_model_dir))
@@ -184,7 +200,11 @@ def training():
             optimizer.zero_grad()
 
             # forward pass
-            return_preds, state_preds, action_preds = model(states, actions, rtg, timesteps, attention_mask)
+            if args.hugging_transformer:
+                output: DecisionTransformerOutput = model(states, actions, None, rtg, timesteps, attention_mask)
+                action_preds = output.action_preds
+            else:
+                _, _, action_preds = model(states, actions, None, rtg, timesteps, attention_mask)
 
             # compute loss
             loss = loss_fn(action_preds, actions_target)
