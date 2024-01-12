@@ -29,7 +29,8 @@ class DecisionTransformer(nn.Module):
                 nhead=1,
                 dim_feedforward=4*self.hidden_dim,
                 dropout=0.1,
-                activation="gelu"
+                activation="gelu",
+                batch_first=True
             ),
             num_layers=3
         )
@@ -94,9 +95,7 @@ class DecisionTransformer(nn.Module):
         if len(attention_mask.shape) == 2: # nn.Transformer expects either a (l,l) or (b,l,l) mask, but can't handle (b,l) masks
             attention_mask = attention_mask.unsqueeze(1).repeat(1, attention_mask.shape[1], 1) # broadcast attention vector to matrix (copy row-wise)
 
-        embeddings = embeddings.permute(1, 0, 2) # shape (3*seq_length, batch_size, hidden_dim), because nn.Transformer expects (l,b,d) (????????)
         x = self.transformer(embeddings) # TODO: currently results in nan values if attention_mask is passed
-        x = x.permute(1, 0, 2) # shape (batch_size, 3*seq_length, hidden_dim)
 
         # reshape x to reverse the stacking & interleaving
         # returns (0), states (1), or actions (2); i.e. x[:,1,t] is the token for s_t
