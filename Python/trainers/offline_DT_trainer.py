@@ -15,6 +15,7 @@ from transformers.models.decision_transformer.modeling_decision_transformer impo
 from dataset.trajectory_dataset import TrajectoryDataset
 from networks.decision_transformer import DecisionTransformer
 from utils.training_utils import find_best_device, encode_actions, decode_actions
+from modules.loss.action_crossentropy import TenTenActionLoss
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -81,7 +82,7 @@ def parse_args():
     parser.add_argument("-e", "--epochs", type=int,
                         help="The number of epochs to train.", default=2)
     parser.add_argument("-lr", "--learning_rate", type=float,
-                        help="The learning rate to use for training.", default=0.001)
+                        help="The learning rate to use for training.", default=1e-4)
     parser.add_argument("-ss", "--step_size", type=int,
                         help="The stepsize used in the SGD algorithm. ", default=1)
     parser.add_argument("-dc", "--lr_decay", type=float,
@@ -173,7 +174,7 @@ def training():
     )
 
     if args.loss_fn == "CE":
-        loss_fn = torch.nn.CrossEntropyLoss()
+        loss_fn = TenTenActionLoss()
     elif args.loss_fn == "MSE":
         loss_fn = lambda y_hat, y: torch.mean((y_hat - y)**2)
     else:
@@ -204,7 +205,7 @@ def training():
                 output: DecisionTransformerOutput = model(states, actions, None, rtg, timesteps, attention_mask)
                 action_preds = output.action_preds
             else:
-                _, _, action_preds = model(states, actions, None, rtg, timesteps, attention_mask)
+                _, _, action_preds = model(states, actions, rtg, timesteps, attention_mask)
 
             # compute loss
             loss = loss_fn(action_preds, actions_target)
@@ -224,7 +225,7 @@ def training():
         scheduler.step()
 
     # save final model and optimizer
-    save_file(model.state_dict(), os.path.join(args.model_dir, f"model_final.safetensors"))
+    save_file(model.state_dict(), os.path.join(args.model_dir, "model_final.safetensors"))
     
 if __name__=="__main__":
     training()
