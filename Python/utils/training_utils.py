@@ -35,7 +35,7 @@ def encode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
     
     encoded_actions = torch.zeros(action_batch.shape[0], action_batch.shape[1], sum(action_space), device=action_batch.device)
 
-    offset = [0] + list(action_space)[:-1]
+    offset = np.insert(np.cumsum(list(action_space)), 0,0)
     for i, sequence in enumerate(action_batch):
         for j, action in enumerate(sequence):
             for k, a in enumerate(action):
