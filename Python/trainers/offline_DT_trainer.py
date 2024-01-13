@@ -1,7 +1,7 @@
 import torch
 import wandb
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 
 import os
 import argparse
@@ -59,6 +59,8 @@ def parse_args():
     # DATASET
     parser.add_argument("-ds", "--dataset", type=str,
                         help="The dataset to use as training data.", required=True)
+    parser.add_argument("-dsval", "--dataset_validation", type=str,
+                        help="The dataset to use as validation data.", default=None)
     parser.add_argument("-conv", "--conversion", type=bool,
                         help="Flag to indicate that the given dataset needs to be converted.", default=False)
     parser.add_argument("-minlen", "--min_seq_len", type=int,
@@ -67,6 +69,8 @@ def parse_args():
                         help="The (inclusive) maximum length of sequences to train on.", required=True)
     parser.add_argument("-stride", "--stride", type=int,
                         help="The stride to use for the sliding window.", default=1)
+    parser.add_argument("-valsplit", "--validation_split", type=float,
+                        help="The percentage of the dataset to use for validation.", default=0.2)
     
 
     # TRANSFORMER
@@ -163,7 +167,7 @@ def training():
     device = find_best_device(args.use_gpu)
 
     # load dataset
-    tds = TrajectoryDataset(
+    trajectory_train = TrajectoryDataset(
         args.min_seq_len,
         args.max_seq_len,
         args.stride,
@@ -171,11 +175,32 @@ def training():
     )
 
     # after loading the dataset, check for the maximum sequence length
-    dataset_max_seq_len = tds.max_subseq_length
+    dataset_max_seq_len = trajectory_train.max_subseq_length
 
-    # create dataloader
-    dataloader = DataLoader(
-        dataset=tds,
+    if args.dataset_validation is not None:
+        trajectory_val = TrajectoryDataset(
+            args.min_seq_len,
+            args.max_seq_len,
+            args.stride,
+            args.dataset_validation
+        )
+        assert dataset_max_seq_len == trajectory_val.max_subseq_length, "The maximum sequence length of the validation dataset does not match the training dataset!"
+    else:
+        # create train & val random split
+        dataset_lengths = [int(len(trajectory_train) * (1 - args.validation_split)), int(len(trajectory_train) * args.validation_split)]
+        trajectory_train, trajectory_val = random_split(trajectory_train, dataset_lengths)
+
+
+
+    # create dataloaders
+    dataloader_train = DataLoader(
+        dataset=trajectory_train,
+        batch_size=args.batch_size,
+        shuffle=args.shuffle,
+        num_workers=args.workers
+    )
+    dataloader_val = DataLoader(
+        dataset=trajectory_val,
         batch_size=args.batch_size,
         shuffle=args.shuffle,
         num_workers=args.workers
@@ -239,7 +264,7 @@ def training():
     for epoch in epoch_progress:
         epoch_loss = 0
         epoch_step = 0
-        for batch in tqdm(dataloader, desc="Batches", unit="batch", leave=False, position=1):
+        for batch in tqdm(dataloader_train, desc="Batches", unit="batch", leave=False, position=1):
 
             # Get data
             states = batch[0].to(device)
@@ -279,14 +304,50 @@ def training():
 
         global_step += epoch_step
 
+        # validation loss
+        val_loss = 0
+        val_step = 0
+        with torch.no_grad():
+            validation_progress = tqdm(dataloader_val, desc="Validation", unit="batch", leave=False, position=1)
+            for batch in validation_progress:
+                # Get data
+                states = batch[0].to(device)
+                actions = batch[1].to(device)
+                actions = encode_actions(actions, action_space) if args.act_enc else actions
+                rtg = batch[2].to(device)
+                timesteps = batch[3].to(device)
+                attention_mask = batch[4].to(device)
+
+                actions_target = torch.clone(actions)
+
+                # forward pass
+                if args.hugging_transformer:
+                    output: DecisionTransformerOutput = model(states, actions, None, rtg, timesteps, attention_mask)
+                    action_preds = output.action_preds
+                else:
+                    _, _, action_preds = model(states, actions, rtg, timesteps, attention_mask)
+
+                # use attention mask on prediction and targets to select
+                action_preds = action_preds[attention_mask < 1]
+                actions_target = actions_target[attention_mask < 1]
+
+                # compute loss
+                loss = loss_fn(action_preds, actions_target)
+                val_loss += loss.item()
+                val_step += 1
+
+                validation_progress.set_postfix({"loss": loss.item()})
+
         # log metrics
         epoch_loss /= epoch_step
+        val_loss /= val_step
         log_config = {
             "epoch": epoch,
             "epoch_step": epoch_step,
             "global_step": global_step,
             "train/epoch_loss": epoch_loss,
-            "train/learning_rate": scheduler.get_last_lr()[0]
+            "train/learning_rate": scheduler.get_last_lr()[0],
+            "val/epoch_loss": val_loss
         }
         wandb.log(log_config, step=global_step)
 
