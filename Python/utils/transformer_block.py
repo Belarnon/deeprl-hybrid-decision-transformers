@@ -49,23 +49,48 @@ class SelfAttention(nn.Module):
         w_prime = torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(d)
         #----------------
 
+        # create zero-copy of w_prime to fill with attention mask
+        # (b*h, l, l)
+        w = torch.zeros_like(w_prime)
+
         # Apply the attention mask.
         if attention_mask is not None:
-            if len(attention_mask.shape) == 2:
-                attention_mask = attention_mask.unsqueeze(1).repeat(1, l, 1) # broadcast attention vector to matrix (copy row-wise)
-            attention_mask = attention_mask.repeat_interleave(h, dim=0) # copy each attention matrix h times, since we have b*h weight matrices now
-            w_prime[attention_mask==0] = -np.inf
+            
+            # for each item in the batch, create the lower triangular matrix and pad with zeros
+            for i, mask in enumerate(attention_mask):
+                mask_len = int(mask.sum())
+                pad_len = l - mask_len
+                mask_matrix = mask.repeat(mask_len,1)[:, pad_len:]
+                indices = torch.triu_indices(mask_len, mask_len, offset=1)
+                mask_matrix[indices[0], indices[1]] = 0.0
+                new_w = w_prime[i, pad_len:, pad_len:].clone()
+                new_w[mask_matrix == 0] = float('-inf')
+                sm_w = torch.nn.functional.softmax(new_w, dim=-1)
+                w[i, pad_len:, pad_len:] = sm_w
+
+
+            """# set every zero to -inf
+            attention_matrix[attention_matrix == 0.0] = float('inf')
+            # set upper offset triangular matrix to 0
+            indices = torch.triu_indices(l,l, offset=1)
+            attention_matrix[:, indices[0], indices[1]] = 0.0
+
+            # copy again for each head
+            attention_matrix = attention_mask.repeat_interleave(h, dim=0).float()
+            # element-wise multiplication with weights
+            w_prime = w_prime.mul(attention_matrix)"""
+
         else:
             # By default, only attend to the preceding elements.
             indices = torch.triu_indices(l, l, offset=1) # returns a tuple of two tensors specifying row and column indices
-            w_prime[:, indices[0], indices[1]] = -np.inf
-
-
-        # Compute w by normalizing w' over the last dimension.
-        # Shape: [b*h, l, l]
-        #----------------
-        w = nn.functional.softmax(w_prime, dim=-1)
-        #----------------
+            # set to -inf to not break softmax!
+            w_prime[:, indices[0], indices[1]] = float('-inf')
+    
+            # Compute w by normalizing w' over the last dimension.
+            # Shape: [b*h, l, l]
+            #----------------
+            w = nn.functional.softmax(w_prime, dim=-1)
+            #----------------
         
         
         # Apply the self attention to the values.
