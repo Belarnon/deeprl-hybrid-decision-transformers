@@ -34,7 +34,7 @@ code is heavily inspired by https://github.com/bastianschildknecht/cil-ethz-2023
 """
 
 def banner():
-    print(pyfiglet.figlet_format("HDT", font="slant"))
+    print(pyfiglet.figlet_format("HDT-Offline Trainer", font="slant"))
 
 def parse_args():
     """
@@ -252,6 +252,10 @@ def training():
             else:
                 _, _, action_preds = model(states, actions, rtg, timesteps, attention_mask)
 
+            # use attention mask on prediction and targets to select
+            action_preds = action_preds[attention_mask < 1]
+            actions_target = actions_target[attention_mask < 1]
+
             # compute loss
             loss = loss_fn(action_preds, actions_target)
             epoch_loss += loss.item()
@@ -259,6 +263,8 @@ def training():
 
             # backprop
             loss.backward()
+            # clip gradient with value from paper github
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.25)
             optimizer.step()
             epoch_step += 1
 
@@ -284,6 +290,8 @@ def training():
 
     # save final model and optimizer
     save_model(model, os.path.join(args.model_dir, "model_final.safetensors"))
+
+    # return
 
     # evaluate model
     print("Evaluating model...")

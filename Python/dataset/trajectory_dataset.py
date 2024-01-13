@@ -136,7 +136,7 @@ class TrajectoryDataset(Dataset):
         actions = np.concatenate([np.zeros((pad_steps, action_dim)), actions])
         rewards = np.concatenate([np.zeros((pad_steps, reward_dim)), rewards])
         timesteps = np.concatenate([np.zeros(pad_steps), timesteps])
-        attention_mask = np.concatenate([np.zeros(pad_steps), np.ones(seq_len)])
+        attention_mask = np.concatenate([np.ones(pad_steps), np.zeros(seq_len)])
 
         states = torch.from_numpy(states).float()
         actions = torch.from_numpy(actions).float()

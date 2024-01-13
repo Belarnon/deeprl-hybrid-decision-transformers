@@ -109,11 +109,13 @@ class DecisionTransformer(nn.Module):
             (attention_mask, attention_mask, attention_mask), dim=1
         ).permute(0, 2, 1).reshape(batch_size, 3*seq_length)
 
+        # NOTE If the transformer_block is used as transformer, attention mask SHOULD NOT be converted to bool and repeated
         attention_mask = attention_mask.bool()
-        if len(attention_mask.shape) == 2: # nn.Transformer expects either a (l,l) or (b,l,l) mask, but can't handle (b,l) masks
-            attention_mask = attention_mask.unsqueeze(1).repeat(1, attention_mask.shape[1], 1) # broadcast attention vector to matrix (copy row-wise)
+        #if len(attention_mask.shape) == 2: # nn.Transformer expects either a (l,l) or (b,l,l) mask, but can't handle (b,l) masks
+        #    attention_mask = attention_mask.unsqueeze(1).repeat(1, attention_mask.shape[1], 1) # broadcast attention vector to matrix (copy row-wise)
 
-        x = self.transformer(embeddings) # TODO: currently results in nan values if attention_mask is passed
+        # since every sequence has its own attention mask vector we need to give it the transformer as mask
+        x = self.transformer(embeddings, src_key_padding_mask=attention_mask)
 
         # reshape x to reverse the stacking & interleaving
         # returns (0), states (1), or actions (2); i.e. x[:,1,t] is the token for s_t
@@ -175,7 +177,7 @@ class DecisionTransformer(nn.Module):
                 (torch.zeros(timesteps.shape[0], self.max_length - timesteps.shape[1], device=timesteps.device), timesteps),
                 dim=1).to(dtype=torch.long) # Maybe we need to change this to int in the future :thinking:
             attention_mask = torch.cat(
-                (torch.zeros(self.max_length - states.shape[1]), torch.ones(states.shape[1]))
+                (torch.ones(self.max_length - states.shape[1]), torch.zeros(states.shape[1]))
                 ).to(dtype=torch.long, device=states.device).reshape(1, -1)
         else:
             attention_mask = None
