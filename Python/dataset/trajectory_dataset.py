@@ -142,6 +142,6 @@ class TrajectoryDataset(Dataset):
         actions = torch.from_numpy(actions).float()
         rewards = torch.from_numpy(rewards).float()
         timesteps = torch.from_numpy(timesteps).int()
-        attention_mask = torch.from_numpy(attention_mask).int()
+        attention_mask = torch.from_numpy(attention_mask)
 
         return [states, actions, rewards, timesteps, attention_mask]
