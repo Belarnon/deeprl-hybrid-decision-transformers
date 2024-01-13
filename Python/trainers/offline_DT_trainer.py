@@ -288,20 +288,21 @@ def training():
     # evaluate model
     print("Evaluating model...")
     
-    episode_return, episode_length = evaluate_episode_rtg(
-        env,
-        args.state_dim,
-        action_dim,
-        model,
-        args.max_ep_len,
-        scale=1000.,
-        state_mean=0.,
-        state_std=1.,
-        device=device,
-        target_return=3.,
-        mode='normal',
-        action_space=action_space,
-    )
+    with torch.no_grad():
+        episode_return, episode_length = evaluate_episode_rtg(
+            env,
+            args.state_dim,
+            action_dim,
+            model,
+            args.max_ep_len,
+            scale=1000.,
+            state_mean=0.,
+            state_std=1.,
+            device=device,
+            target_return=3.,
+            mode='normal',
+            action_space=action_space,
+        )
 
     print(f"Average return: {episode_return}, average length: {episode_length}")
     
