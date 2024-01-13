@@ -47,16 +47,16 @@ class TenTenActionLoss(torch.nn.Module):
         """
         y: (batch_size, seq_len, action_dim)
         """
-        return y[:, :, :self.block_selection_dim]
+        return y[..., :self.block_selection_dim]
     
     def _get_x_vector(self, y):
         """
         y: (batch_size, seq_len, action_dim)
         """
-        return y[:, :, self.block_selection_dim:self.block_selection_dim + self.x_dim]
+        return y[..., self.block_selection_dim:self.block_selection_dim + self.x_dim]
     
     def _get_y_vector(self, y):
         """
         y: (batch_size, seq_len, action_dim)
         """
-        return y[:, :, self.block_selection_dim + self.x_dim:]
+        return y[..., self.block_selection_dim + self.x_dim:]
