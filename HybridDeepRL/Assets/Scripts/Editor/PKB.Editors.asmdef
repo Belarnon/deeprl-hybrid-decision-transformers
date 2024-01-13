@@ -1,0 +1,20 @@
+{
+    "name": "PKB.Editors",
+    "rootNamespace": "PKB.Editors",
+    "references": [
+        "GUID:85e0054f8e64b47309646d35f8851f81",
+        "GUID:42675ddec8c314cf08d17ee0f6f5e5a5",
+        "GUID:65f9ab61415a6de4fa27830eed361a95"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

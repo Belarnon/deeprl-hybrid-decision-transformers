@@ -2,22 +2,22 @@ behaviors:
   TenTen:
     trainer_type: ppo
     hyperparameters:
-      batch_size: 16
-      buffer_size: 120
+      batch_size: 256
+      buffer_size: 16384
       learning_rate: 0.0003
-      beta: 0.005
-      epsilon: 0.2
+      beta: 5.0e-3
+      epsilon: 0.21
       lambd: 0.99
-      num_epoch: 3
-      learning_rate_schedule: linear
+      num_epoch: 4
+      learning_rate_schedule: constant
     network_settings:
-      normalize: true
+      normalize: false
       hidden_units: 512
       num_layers: 4
-      vis_encode_type: simple
+      vis_encode_type: match3
     reward_signals:
       extrinsic:
-        gamma: 0.99
+        gamma: 0.995
         strength: 1.0
     keep_checkpoints: 5
     max_steps: 6000000

@@ -1,0 +1,18 @@
+{
+    "name": "PKB.Sensors",
+    "rootNamespace": "PKB.Sensors",
+    "references": [
+        "GUID:85e0054f8e64b47309646d35f8851f81",
+        "GUID:8a60fe9662ffdcd4db977638eabd5fe5",
+        "GUID:c0ca9b9539385da49b0ae9b2e6f95bb8"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
