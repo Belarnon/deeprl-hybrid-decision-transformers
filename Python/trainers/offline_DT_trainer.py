@@ -144,9 +144,9 @@ def setup_wandb(args: argparse.Namespace) -> None:
 
     wandb.init(
         project="DeepLearning-HDT",
-        name=f"debugging_run_{wandb.util.generate_id()}",
-        notes="This is a debugging run that can later be deleted.",
-        tags=["debug", "offline"],
+        name=f"offline_overfitting_linearembed_{wandb.util.generate_id()}",
+        notes="Offline overfitting run with linear embedding of the state.",
+        tags=["linembed", "overfitting", "offline"],
         config=arg_dict,
         mode="online" if args.wandb else "disabled"
     )
