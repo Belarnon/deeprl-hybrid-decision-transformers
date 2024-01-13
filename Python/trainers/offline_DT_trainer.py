@@ -148,9 +148,9 @@ def setup_wandb(args: argparse.Namespace) -> None:
 
     wandb.init(
         project="DeepLearning-HDT",
-        name=f"offline_overfitting_linearembed_{wandb.util.generate_id()}",
-        notes="Offline overfitting run with linear embedding of the state.",
-        tags=["linembed", "overfitting", "offline"],
+        name=f"offline_validated_expert_trajectories_{wandb.util.generate_id()}",
+        notes="Offline validated strided run on the new expert trajectories and separate validation set.",
+        tags=["stppcd", "stride", "pretraining", "offline"],
         config=arg_dict,
         mode="online" if args.wandb else "disabled"
     )
@@ -377,7 +377,7 @@ def training():
             state_mean=0.,
             state_std=1.,
             device=device,
-            target_return=3.,
+            target_return=40.,
             mode='normal',
             action_space=action_space,
             use_huggingface=args.hugging_transformer
@@ -385,5 +385,10 @@ def training():
 
     print(f"Average return: {episode_return}, average length: {episode_length}")
     
+    wandb.log({
+    "eval/episode_return": episode_return,
+    "eval/episode_length": episode_length
+    })
+
 if __name__=="__main__":
     training()
