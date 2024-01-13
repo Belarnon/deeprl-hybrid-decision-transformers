@@ -112,7 +112,6 @@ namespace PKB.App
         /// <returns>True if the block was successfully placed, false otherwise.</returns>
         public bool AttemptPutBlock(int blockIndex, Vector2Int coordinates)
         {
-            Debug.Log($"Attempting to put block {blockIndex} at {coordinates}.");
             bool success = gameInstance.putBlock(blockIndex, coordinates);
             if (success)
             {

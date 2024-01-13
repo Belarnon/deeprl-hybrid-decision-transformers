@@ -36,6 +36,22 @@ namespace PBK.Agents
         [SerializeField]
         private Vector2Int blockObservationSize = new(5, 5);
 
+        /// <summary>
+        /// The multiplier for positive rewards (i.e. rewards for placing blocks).
+        /// </summary>
+        [Tooltip("The multiplier for positive rewards (i.e. rewards for placing blocks).")]
+        [SerializeField]
+        [Range(0f, 5f)]
+        private float positiveRewardMultiplier = 1f;
+
+        /// <summary>
+        /// The multiplier for negative rewards (i.e. rewards for invalid actions).
+        /// </summary>
+        [Tooltip("The multiplier for negative rewards (i.e. rewards for invalid actions).")]
+        [SerializeField]
+        [Range(0f, 5f)]
+        private float negativeRewardMultiplier = 1f;
+
         #endregion
 
         #region Internal State
@@ -167,7 +183,7 @@ namespace PBK.Agents
             bool success = gameManager.AttemptPutBlock(blockIndex, new Vector2Int(x, y));
             if (gameIsOver)
             {
-                SetReward(-1f);
+                SetReward(-0.01f * negativeRewardMultiplier);
                 CommitAction(actions);
                 CommitReward(GetCumulativeReward());
                 MarkAndEndEpisode();
@@ -180,7 +196,7 @@ namespace PBK.Agents
             }
             else
             {
-                SetReward(-0.001f);
+                SetReward(-1e-5f * negativeRewardMultiplier);
                 RequestDecisionIfNotHeuristic();
             }
             CommitAction(actions);
@@ -253,7 +269,7 @@ namespace PBK.Agents
             int delta = score - lastScore;
             float normalizedScoreDelta = (float)delta / maxPossibleScoreDelta;
             lastScore = score;
-            return normalizedScoreDelta;
+            return normalizedScoreDelta * positiveRewardMultiplier;
         }
         
         /// <summary>
