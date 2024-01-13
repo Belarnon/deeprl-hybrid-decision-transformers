@@ -41,6 +41,20 @@ def parse_args():
     Parses the arguments for the pretraining gym.
     """
 
+    def boolean_type(v):
+        """
+        Helper function to parse boolean arguments.
+        """
+
+        if isinstance(v, bool):
+            return v
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+        else:
+            raise argparse.ArgumentTypeError('Boolean value expected.')
+    
     parser = argparse.ArgumentParser(description="Trains the Hybrid Decision Transformer HDT")
     # DATASET
     parser.add_argument("-ds", "--dataset", type=str,
@@ -105,6 +119,8 @@ def parse_args():
                         help="Enable verbose output.", default=False)
     parser.add_argument("-gpu", "--use_gpu", type=bool,
                         help="Enable training on gpu device.", default=True)
+    parser.add_argument("-wb", "--wandb", type=boolean_type,
+                        help="Enable logging with wandb.", default=True)
     
     # OUTPUT
     parser.add_argument("-moddir", "--model_dir", type=str,
@@ -125,7 +141,8 @@ def setup_wandb(args: argparse.Namespace) -> None:
         name=f"debugging_run_{wandb.util.generate_id()}",
         notes="This is a debugging run that can later be deleted.",
         tags=["debug", "offline"],
-        config=arg_dict
+        config=arg_dict,
+        mode="online" if args.wandb else "disabled"
     )
 
 def training():
