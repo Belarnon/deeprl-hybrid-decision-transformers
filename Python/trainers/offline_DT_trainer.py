@@ -19,7 +19,7 @@ from dataset.trajectory_dataset import TrajectoryDataset
 from evaluation.evaluate_episodes import evaluate_episode_rtg
 from modules.loss.action_crossentropy import TenTenActionLoss
 from networks.decision_transformer import DecisionTransformer
-from utils.training_utils import find_best_device, encode_actions
+from utils.training_utils import find_best_device, encode_actions, decode_actions
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -310,6 +310,7 @@ def training():
             target_return=3.,
             mode='normal',
             action_space=action_space,
+            use_huggingface=args.hugging_transformer
         )
 
     print(f"Average return: {episode_return}, average length: {episode_length}")
