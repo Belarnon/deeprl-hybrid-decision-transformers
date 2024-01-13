@@ -1,6 +1,7 @@
 from matplotlib import pyplot as plt
 import matplotlib.animation as animation
 from typing import List, Any
+from tqdm import tqdm
 import numpy as np
 import json
 
@@ -25,6 +26,17 @@ def load_dataset(dataset_path: str) -> dict:
     with open(dataset_path, 'r') as f:
         dataset = json.load(f)
     return dataset
+
+def save_dataset(dataset: dict, dataset_path: str) -> None:
+    """
+    Save a dataset to a json file.
+
+    Args:
+        dataset (dict): The dataset.
+        dataset_path (str): The path to the dataset.
+    """
+    with open(dataset_path, 'w') as f:
+        json.dump(dataset, f)
 
 def extract_cumulative_reward_series(dataset: dict) -> np.ndarray:
     """
@@ -125,6 +137,41 @@ def extract_block_and_selection_series(dataset: dict, board_shape: tuple = (10, 
                 selection_block_series[selection_block_index].append(selection_block)
 
     return board_series, selection_block_series
+
+# DATASET MERGING
+# ---------------
+
+def merge_datasets(datasets: List[dict], verbose: bool = True) -> dict:
+    """
+    Merge multiple datasets into one.
+
+    Args:
+        datasets (List[dict]): The datasets.
+        verbose (bool, optional): Whether to print the progress. Defaults to True.
+
+    Returns:
+        dict: The merged dataset.
+    """
+    merged_dataset = {
+        __TRAJECTORY_KEY: []
+    }
+    for dataset in tqdm(datasets, disable=not verbose):
+        trajectories: List[dict] = dataset[__TRAJECTORY_KEY]
+        merged_dataset[__TRAJECTORY_KEY].extend(trajectories)
+    return merged_dataset
+
+def merge_datasets_files(dataset_paths: List[str], merged_dataset_path: str) -> None:
+    """
+    Merge multiple datasets into one and save it to a file.
+
+    Args:
+        dataset_paths (List[str]): The paths to the datasets.
+        merged_dataset_path (str): The path to the merged dataset.
+    """
+
+    datasets = [load_dataset(dataset_path) for dataset_path in dataset_paths]
+    merged_dataset = merge_datasets(datasets)
+    save_dataset(merged_dataset, merged_dataset_path)
 
 
 # DATASET PLOTTING
@@ -261,6 +308,15 @@ def visualize_board_evolution(
 
 
 if __name__ == '__main__':
-    dataset = load_dataset('dataset/test_data/demonstration_0.json')
-    visualize_board_evolution(dataset, title='Board Evolution')
+    # dataset = load_dataset('dataset/test_data/demonstration_0.json')
+    # visualize_board_evolution(dataset, title='Board Evolution')
+    dataset_paths = [
+        'dataset/demonstration_0.json',
+        'dataset/demonstration_1.json',
+        'dataset/game_session.json'
+    ]
+
+    merged_dataset_path = 'dataset/expert_trajectories.json'
+    merge_datasets_files(dataset_paths, merged_dataset_path)
+
     
