@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import wandb
 from torch import nn
@@ -7,16 +6,20 @@ from torch.utils.data import DataLoader
 import os
 import argparse
 import pyfiglet
-from safetensors.torch import save_file, load_file
+from safetensors.torch import save_model, load_model
 from tqdm import tqdm
+
+from mlagents_envs.environment import UnityEnvironment
+from mlagents_envs.envs.unity_gym_env import UnityToGymWrapper
 
 import transformers
 from transformers.models.decision_transformer.modeling_decision_transformer import DecisionTransformerOutput
 
 from dataset.trajectory_dataset import TrajectoryDataset
+from evaluation.evaluate_episodes import evaluate_episode_rtg
+from modules.loss.action_crossentropy import TenTenActionLoss
 from networks.decision_transformer import DecisionTransformer
 from utils.training_utils import find_best_device, encode_actions, decode_actions
-from modules.loss.action_crossentropy import TenTenActionLoss
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -31,13 +34,27 @@ code is heavily inspired by https://github.com/bastianschildknecht/cil-ethz-2023
 """
 
 def banner():
-    print(pyfiglet.figlet_format("HDT", font="slant"))
+    print(pyfiglet.figlet_format("HDT-Offline Trainer", font="slant"))
 
 def parse_args():
     """
     Parses the arguments for the pretraining gym.
     """
 
+    def boolean_type(v):
+        """
+        Helper function to parse boolean arguments.
+        """
+
+        if isinstance(v, bool):
+            return v
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+        else:
+            raise argparse.ArgumentTypeError('Boolean value expected.')
+    
     parser = argparse.ArgumentParser(description="Trains the Hybrid Decision Transformer HDT")
     # DATASET
     parser.add_argument("-ds", "--dataset", type=str,
@@ -48,6 +65,8 @@ def parse_args():
                         help="The (inclusive) minimum length of sequences to train on.", required=True)
     parser.add_argument("-maxlen", "--max_seq_len", type=int,
                         help="The (inclusive) maximum length of sequences to train on.", required=True)
+    parser.add_argument("-stride", "--stride", type=int,
+                        help="The stride to use for the sliding window.", default=1)
     
 
     # TRANSFORMER
@@ -100,6 +119,8 @@ def parse_args():
                         help="Enable verbose output.", default=False)
     parser.add_argument("-gpu", "--use_gpu", type=bool,
                         help="Enable training on gpu device.", default=True)
+    parser.add_argument("-wb", "--wandb", type=boolean_type,
+                        help="Enable logging with wandb.", default=True)
     
     # OUTPUT
     parser.add_argument("-moddir", "--model_dir", type=str,
@@ -120,7 +141,8 @@ def setup_wandb(args: argparse.Namespace) -> None:
         name=f"debugging_run_{wandb.util.generate_id()}",
         notes="This is a debugging run that can later be deleted.",
         tags=["debug", "offline"],
-        config=arg_dict
+        config=arg_dict,
+        mode="online" if args.wandb else "disabled"
     )
 
 def training():
@@ -138,9 +160,8 @@ def training():
     tds = TrajectoryDataset(
         args.min_seq_len,
         args.max_seq_len,
-        args.dataset,
-        args.conversion,
-        device
+        args.stride,
+        args.dataset
     )
 
     # after loading the dataset, check for the maximum sequence length
@@ -180,7 +201,7 @@ def training():
 
 
     if args.load_model:
-        model.load_state_dict(load_file(args.load_model_dir))
+        model.load_state_dict(load_model(args.load_model_dir))
         model.eval()
 
     # setup optimizer, loss 
@@ -197,6 +218,11 @@ def training():
         loss_fn = lambda y_hat, y: torch.mean((y_hat - y)**2)
     else:
         raise NotImplementedError(f"Unknown loss function {args.loss_fn}!")
+    
+    print("Waiting for Unity environment...")
+    env = UnityEnvironment()
+    env = UnityToGymWrapper(env, allow_multiple_obs=True)
+    print("Unity environment started successfully! Starting training...")
 
     # start training loop
     global_step = 0
@@ -207,12 +233,12 @@ def training():
         for batch in tqdm(dataloader, desc="Batches", unit="batch", leave=False, position=1):
 
             # Get data
-            states = batch[0].to(device).squeeze()
-            actions = batch[1].to(device).squeeze()
+            states = batch[0].to(device)
+            actions = batch[1].to(device)
             actions = encode_actions(actions, action_space) if args.act_enc else actions
-            rtg = batch[2].to(device).unsqueeze(-1)
-            timesteps = batch[3].to(device).squeeze()
-            attention_mask = batch[4].to(device).squeeze()
+            rtg = batch[2].to(device)
+            timesteps = batch[3].to(device)
+            attention_mask = batch[4].to(device)
 
             actions_target = torch.clone(actions)
 
@@ -226,6 +252,10 @@ def training():
             else:
                 _, _, action_preds = model(states, actions, rtg, timesteps, attention_mask)
 
+            # use attention mask on prediction and targets to select
+            action_preds = action_preds[attention_mask < 1]
+            actions_target = actions_target[attention_mask < 1]
+
             # compute loss
             loss = loss_fn(action_preds, actions_target)
             epoch_loss += loss.item()
@@ -233,6 +263,8 @@ def training():
 
             # backprop
             loss.backward()
+            # clip gradient with value from paper github
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.25)
             optimizer.step()
             epoch_step += 1
 
@@ -251,13 +283,37 @@ def training():
 
         # save model after some epocds
         if epoch % args.save_every == 0:
-            save_file(model.state_dict(), os.path.join(args.model_dir, f"model_e{epoch}.safetensors"))
+            save_model(model, os.path.join(args.model_dir, f"model_e{epoch}.safetensors"))
         
         # let learning rate scheduler make a step
         scheduler.step()
 
     # save final model and optimizer
-    save_file(model.state_dict(), os.path.join(args.model_dir, "model_final.safetensors"))
+    save_model(model, os.path.join(args.model_dir, "model_final.safetensors"))
+
+    # return
+
+    # evaluate model
+    print("Evaluating model...")
+    
+    with torch.no_grad():
+        episode_return, episode_length = evaluate_episode_rtg(
+            env,
+            args.state_dim,
+            action_dim,
+            model,
+            args.max_ep_len,
+            scale=1000.,
+            state_mean=0.,
+            state_std=1.,
+            device=device,
+            target_return=3.,
+            mode='normal',
+            action_space=action_space,
+            use_huggingface=args.hugging_transformer
+        )
+
+    print(f"Average return: {episode_return}, average length: {episode_length}")
     
 if __name__=="__main__":
     training()

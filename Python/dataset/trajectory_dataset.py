@@ -23,176 +23,125 @@ class TrajectoryDataset(Dataset):
 
     """
 
-    def __init__(self, min_subseq_length : int, max_subseq_length : int, filepath : str, needs_conversion : bool = False, device = None):
+    def __init__(self, min_subseq_length : int, max_subseq_length : int, stride : int, filepath : str):
         self.min_subseq_length = min_subseq_length
-        self.max_subseq_length = max_subseq_length
-        # assume that filepath is \\dataset.pt
+        # max is set later!
+        #self.max_subseq_length = max_subseq_length
+        self.stride = stride
         self.filepath = filepath
-        self.expert_trajectories = []
-        if needs_conversion:
-            self._load_convert_save()
-        else:
-            self._load()
-    
-    def _readJSON(self) -> list:
-        # read in file
-        with open(file=self.filepath) as file:
-            taus_json = json.load(file)
 
-        taus = []
-        # convert to correct format
-        for t in taus_json['trajectories']:
-            tau = []
-            # t = [ { "obs" : <>, "act" : <>, "rwd" : <>}, ..]
-            #nr_steps = len(t)# // 3
-            for step in t['transitions']:
-                tau += [step['observation'], step['action']['discreteActions'], step['reward']]
-            # append to expert_trajectories if not empty
-            if len(tau) > 0:
-                taus += [tau]
-        
-        return taus
-
-    
-    def _load(self):
-        """
-        We assume that the file has already been brought into the .pt file!!
-        Otherwise call _load_convert_save() for JSON files to first convert
-        """
-        tau_ts = torch.load(self.filepath)
-        # leave out seqs that are shorter or longer than provided min/max_subseq_length
-        self.expert_trajectories = [t for t in tau_ts if self.min_subseq_length <= len(t[0])//3 and len(t[0])//3 <= self.max_subseq_length]
-        # set max_subseq_len to the maximal sequence length in expert_trajectories
-        # to prevent unnecessary padding!
-
-        self.max_subseq_length = len( max(self.expert_trajectories, key=lambda x: len(x[0]))[0])//3
-
-
-    def _load_convert_save(self):
-        """
-        Take a stored expert trajectory, convert it to the desired format
-        and cut into all possible subsequences between (including) min/max_subseq_length
-        then save again to save on computation!
-        """
-        # load raw trajectories form filepath
-        # check if given file has .json or .pt file ending
-        # should only be json but hey, you never know..
+        # load json, extract list of trajectories
+        # check if given file has .json ending
         file_ending = self.filepath.split('.')[-1]
         if file_ending == 'json':
-            raw_trajectories = self._readJSON()
-        elif file_ending == 'pt':
-            raw_trajectories = torch.load(self.filepath)
+            with open(file=self.filepath) as file:
+                taus_json = json.load(file)['trajectories']
         else:
             raise NotImplementedError(f"File ending is unknown! {file_ending}")
-        
-        # iterate over all trajectories and convert to subsequences
-        for tau in raw_trajectories:
-            tau_t = self._convert_tau(tau)
-            cut_tau_ts = self._cut_tau(tau_t)
-        
-            # add to expert trajectories
-            self.expert_trajectories += cut_tau_ts
-
-        # save as .pt file at given save filepath
-        torch.save(self.expert_trajectories, "".join(self.filepath.split('.')[:-1]+["_converted.pt"]))
-
     
-    def _convert_tau(self, tau):
-        """
-        Computes return-to-go for trajectory and adds timesteps
-        """
-
-        # check how many actions did happen within this trajectory
-        nr_steps = len(tau) // 3
-        # new trajectory as empty list
-        tau_t = []
-        # final cumulative reward to compute return-to-go
-        # should be last element in a sequence
-        final_cum_reward = tau[-1]
-
-        # iterate from last!! state to first state, so it is easier to compute the return-to-go
-        # each packet has (state, action, reward)
-        for i in range(nr_steps-1, -1, -1):
-            shifted_idx = 3*i
-            state = tau[shifted_idx]
-            action = tau[shifted_idx + 1]
-            cum_reward = tau[shifted_idx + 2]
-            returntogo = cum_reward - final_cum_reward
-
-            # add to beginning of the new tau
-            tau_t = [state, action, returntogo] + tau_t
-
-        # add timesteps array to tau!
-        tau_t = [tau_t, np.linspace(0, nr_steps-1, nr_steps)]
-
-        return tau_t
-
-    def _cut_tau(self, tau_t : list) -> [list]:
-        cut_tau_ts = []
-        # iterate over all possible subsequence lengts
-        # check if current tau has the max and length!
+        # get list of trajectories, where every trajectory is a list of transitions
+        # remove empty trajectories
+        self.taus = [t['transitions'] for t in taus_json if len(t['transitions']) != 0]
+        # get lengths of trajectories
+        self.taus_lengths = [len(t) for t in self.taus]
+        # adjust max_subseq_len by maximum possible sequence
+        self.max_subseq_length = min(max_subseq_length, max(self.taus_lengths))
         
-        # if tau does not have the minimum length, return empty list 
-        if len(tau_t[1]) // 3 < self.min_subseq_length:
-            return []
-        
-        max_subseq_length = min(len(tau_t[0]) // 3, self.max_subseq_length)
+        # compute number of all subsequences and fill LookUp-Table for number
+        # of subsequences for each sequence and length
+        self.LUT = self._compute_subseq_LUT()
+        self.total_nr_subseq =  int(self.LUT.sum())
 
-        for length in range(self.min_subseq_length, max_subseq_length+1, 1):
-            # iterate from end to beginning with window of size length
-            # change RTG
-            cut_tau_ts += self._subseq_tau(tau_t, length)
+    def _compute_subseq_LUT(self) -> np.ndarray:
+        # compute number of different subsequence lengths
+        nr_subseq_lengths = self.max_subseq_length - self.min_subseq_length + 1
+        # create table with dim = (nr_taus, nr_subseq_lengths)
+        lookuptable = np.zeros((len(self.taus), nr_subseq_lengths), dtype=int)
         
-        return cut_tau_ts
+        # iterate over all trajectory lengths
+        for i, tau_len in enumerate(self.taus_lengths):
+            # iterate over all subseq lengths
+            for j, seq_len in enumerate(list(range(self.min_subseq_length, self.max_subseq_length+1))):
+                overlap = seq_len - self.stride
+                lookuptable[i,j] = (tau_len - overlap) // self.stride
 
-    def _subseq_tau(self, tau_t : list, seq_len : int) -> [list]:
-        # separate tau from timesteps
-        tau, timesteps = tau_t
-        # create all subsequences of the given length for this tau and timesteps
-        sub_seq = []
-        nr_steps = len(tau) // 3
-        # sequence starts at 3*(nr_steps-subseq_len)
-        # length is 3*subseq_len
-        for i in range(nr_steps-seq_len, -1, -1):
-            shifted_idx_low = 3*i
-            shifted_idx_high = shifted_idx_low + 3* seq_len
-            seq = tau[shifted_idx_low:shifted_idx_high]
-            times = timesteps[i:i+seq_len]
-            # change all RTG!
-            rtg_diff = seq[-1]
-            for j in range(seq_len-1, -1, -1):
-                shifted_idx = 3*j+2
-                seq[shifted_idx] -= rtg_diff
-            
-            sub_seq += [[seq,times]]
-        
-        return sub_seq
+        return lookuptable
+
 
     def __len__(self) -> int:
-        return len(self.expert_trajectories)
+        return self.total_nr_subseq
     
-    
+
     def __getitem__(self, idx: int) -> list:
-        # get trajectory with timesteps and separate
-        tau, timesteps = self.expert_trajectories[idx]
 
-        # take every third element
-        # already pad from left with zeros to max_subseq_length
-        nr_steps = len(tau) // 3
-        pad_steps = self.max_subseq_length - len(tau)//3
-        state_dim = len(tau[0])
-        action_dim = len(tau[1])
+        # from index compute tau:
+        # - which trajectory
+        # - which sequence length
+        # - 
+       
+        # check via look up table which sequence and which subsequence length to take
+        inter_idx = idx
+        tau_idx, seqlen_idx = -1,-1
+        is_finished = False
+        # nested for-loop iteration over lookuptable row-wise to find traj and seq len
+        for i in range(len(self.taus)):
+            if is_finished: break
+            for j in range(self.max_subseq_length - self.min_subseq_length + 1):
+                # get number of trajectories for this tau and seqlen
+                # if inter_idx is bigger than it, subtract number of sequences and go on
+                # else the inter_idx is the index of th subseq for the tau and subseq len
+                curr_nr_subseq = self.LUT[i, j]
+                if inter_idx >= curr_nr_subseq:
+                    inter_idx -= curr_nr_subseq
+                else:
+                    tau_idx, seqlen_idx = i,j
+                    is_finished = True
+                    break
 
-        states = np.concatenate([np.zeros((pad_steps, state_dim)), tau[0::3]])
-        actions = np.concatenate([np.zeros((pad_steps, action_dim)), tau[1::3]]) # every third element starting at index 1
-        rtg = np.concatenate([np.zeros(pad_steps), tau[2::3]])
+        # get computed tau and seq length
+        # seq_len is min_seq_len + index
+        tau, seq_len = self.taus[tau_idx], self.min_subseq_length + seqlen_idx
+
+        # use inter_idx to get starting index using the stride
+        # also compute end index
+        start_idx = inter_idx * self.stride
+        end_idx = start_idx + seq_len
+        # get subsequence from tau
+        subseq = tau[start_idx:end_idx]
+
+        # convert tau from json format to separate arrays
+        state_dim = len(tau[0]['observation'])
+        action_dim = len(tau[0]['action']['discreteActions'])
+        reward_dim = 1 if type(tau[0]['reward']) is float else len(tau[0]['reward'])
+
+        states = np.zeros((seq_len, state_dim))
+        actions = np.zeros((seq_len, action_dim))
+        rewards = np.zeros((seq_len, reward_dim))
+
+        # iterate BACKWARDS over subseq and fill arrays
+        target_rtg = subseq[-1]['reward']
+        # return to go: take last reward and subtract from every reward to get return-to-go
+        for i in range(seq_len-1, -1, -1):
+            states[i] = subseq[i]['observation']
+            actions[i] = subseq[i]['action']['discreteActions']
+            rewards[i] = subseq[i]['reward'] - target_rtg
+
+        # timesteps
+        timesteps = np.linspace(1, seq_len, seq_len)
+
+        #pad from left with zeros to max_subseq_length
+        pad_steps = self.max_subseq_length - seq_len
+
+        states = np.concatenate([np.zeros((pad_steps, state_dim)), states])
+        actions = np.concatenate([np.zeros((pad_steps, action_dim)), actions])
+        rewards = np.concatenate([np.zeros((pad_steps, reward_dim)), rewards])
         timesteps = np.concatenate([np.zeros(pad_steps), timesteps])
-        attention_mask = np.concatenate([np.zeros(pad_steps), np.ones(nr_steps)])
+        attention_mask = np.concatenate([np.ones(pad_steps), np.zeros(seq_len)])
 
         states = torch.from_numpy(states).float()
         actions = torch.from_numpy(actions).float()
-        rtg = torch.from_numpy(rtg).float()
+        rewards = torch.from_numpy(rewards).float()
         timesteps = torch.from_numpy(timesteps).int()
-        attention_mask = torch.from_numpy(attention_mask).int()
+        attention_mask = torch.from_numpy(attention_mask)
 
-        return [states, actions, rtg, timesteps, attention_mask]
+        return [states, actions, rewards, timesteps, attention_mask]
