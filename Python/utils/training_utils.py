@@ -25,7 +25,7 @@ def find_best_device(use_gpu: bool = False) -> torch.device:
 
     return device
 
-def encode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
+def encode_actions(action_batch: torch.Tensor, action_space=(3,10,10)):
     """
     Encodes actions into one-hot vectors.
 
@@ -43,7 +43,7 @@ def encode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
 
     return encoded_actions
 
-def decode_actions(action_batch: torch.tensor, action_space=(3,10,10)):
+def decode_actions(action_batch: torch.Tensor, action_space=(3,10,10)):
     """
     Decodes one-hot action vectors into action sequences.
 

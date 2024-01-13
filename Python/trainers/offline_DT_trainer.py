@@ -87,7 +87,13 @@ def parse_args():
     parser.add_argument("-hd", "--hidden_dim", type=int,
                         help="The dimension of the embedding for the transformer.", default=128)
     parser.add_argument("-tanh", "--act_tanh", type=bool,
-                        help="Set tanh layer at the end of action predictor.", default=False)
+                        help="Set tanh layer at the end of action predictor.", default=False),
+    parser.add_argument("-stppcd", "--state_preprocessed", type=boolean_type,
+                        help="Flag to indicate whether the state should be preprocessed.", default=True)
+    parser.add_argument("-gridsz", "--grid_size", type=int,
+                        help="The size of the grid in the state vector.", default=10)
+    parser.add_argument("-blocksz", "--block_size", type=int,
+                        help="The size of the blocks in the state vector.", default=5)
     
     # TRAINING
     #   LOAD AND SAVE
@@ -191,12 +197,15 @@ def training():
         model = transformers.DecisionTransformerModel(config).to(device)
     else:
         model = DecisionTransformer(
-            args.state_dim,
-            action_dim,
-            args.hidden_dim,
-            dataset_max_seq_len,
-            args.max_ep_len,
-            args.act_tanh
+            state_dim=args.state_dim,
+            action_dim=action_dim,
+            hidden_dim=args.hidden_dim,
+            max_length=dataset_max_seq_len,
+            max_episode_length=args.max_ep_len,
+            action_tanh=args.act_tanh,
+            fancy_look_embedding=args.state_preprocessed,
+            grid_size=args.grid_size,
+            block_size=args.block_size
         ).to(device)
 
 

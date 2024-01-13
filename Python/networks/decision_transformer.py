@@ -14,7 +14,9 @@ class DecisionTransformer(nn.Module):
             max_length=None, # the number of timesteps to consider in the past
             max_episode_length=4096, # the maximum number of timesteps in an episode/trajectory
             action_tanh=True,
-            **kwargs
+            fancy_look_embedding=True, # whether to use state preprocessing using a CNN and more
+            grid_size=10, # needed for fancy_look_embedding
+            block_size=5 # needed for fancy_look_embedding
             ):
         super().__init__()
 
@@ -23,8 +25,8 @@ class DecisionTransformer(nn.Module):
         self.max_length = max_length
         self.hidden_dim = hidden_dim
 
-        self.grid_size = kwargs.get("grid_size", 10)
-        self.block_size = kwargs.get("block_size", 5)
+        self.grid_size = grid_size
+        self.block_size = block_size
         self.grid_size_squared = self.grid_size*self.grid_size
         self.block_size_squared = self.block_size*self.block_size
         
@@ -49,7 +51,10 @@ class DecisionTransformer(nn.Module):
         # Define linear layers
         self.embed_timestep = nn.Embedding(max_episode_length, self.hidden_dim)
         self.embed_action = nn.Linear(self.action_dim, self.hidden_dim)
-        self.embed_state = ObservationEncoder(self.grid_cnn, self.block_cnn, self.res_mlp, self.grid_size, self.block_size)
+        if fancy_look_embedding:
+            self.embed_state = ObservationEncoder(self.grid_cnn, self.block_cnn, self.res_mlp, self.grid_size, self.block_size)
+        else:
+            self.embed_state = nn.Linear(self.state_dim, self.hidden_dim)
         self.embed_return = nn.Linear(1, self.hidden_dim)
 
         self.embed_ln = nn.LayerNorm(self.hidden_dim)
