@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 import os
 import argparse
 import pyfiglet
-from safetensors.torch import save_file, load_file
+from safetensors.torch import save_model, load_model
 from tqdm import tqdm
 
 from mlagents_envs.environment import UnityEnvironment
@@ -201,7 +201,7 @@ def training():
 
 
     if args.load_model:
-        model.load_state_dict(load_file(args.load_model_dir))
+        model.load_state_dict(load_model(args.load_model_dir))
         model.eval()
 
     # setup optimizer, loss 
@@ -277,31 +277,32 @@ def training():
 
         # save model after some epocds
         if epoch % args.save_every == 0:
-            save_file(model.state_dict(), os.path.join(args.model_dir, f"model_e{epoch}.safetensors"))
+            save_model(model, os.path.join(args.model_dir, f"model_e{epoch}.safetensors"))
         
         # let learning rate scheduler make a step
         scheduler.step()
 
     # save final model and optimizer
-    save_file(model.state_dict(), os.path.join(args.model_dir, "model_final.safetensors"))
+    save_model(model, os.path.join(args.model_dir, "model_final.safetensors"))
 
     # evaluate model
     print("Evaluating model...")
     
-    episode_return, episode_length = evaluate_episode_rtg(
-        env,
-        args.state_dim,
-        action_dim,
-        model,
-        args.max_ep_len,
-        scale=1000.,
-        state_mean=0.,
-        state_std=1.,
-        device=device,
-        target_return=3.,
-        mode='normal',
-        action_space=action_space,
-    )
+    with torch.no_grad():
+        episode_return, episode_length = evaluate_episode_rtg(
+            env,
+            args.state_dim,
+            action_dim,
+            model,
+            args.max_ep_len,
+            scale=1000.,
+            state_mean=0.,
+            state_std=1.,
+            device=device,
+            target_return=3.,
+            mode='normal',
+            action_space=action_space,
+        )
 
     print(f"Average return: {episode_return}, average length: {episode_length}")
     

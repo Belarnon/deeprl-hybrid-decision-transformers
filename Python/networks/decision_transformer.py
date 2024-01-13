@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+from modules.observation_encoder import ObservationEncoder, GridEncoder, BlockEncoder, ResidualMLP
 from utils.transformer_block import TransformerBlock
 
 class DecisionTransformer(nn.Module):
@@ -22,6 +23,11 @@ class DecisionTransformer(nn.Module):
         self.max_length = max_length
         self.hidden_dim = hidden_dim
 
+        self.grid_size = kwargs.get("grid_size", 10)
+        self.block_size = kwargs.get("block_size", 5)
+        self.grid_size_squared = self.grid_size*self.grid_size
+        self.block_size_squared = self.block_size*self.block_size
+        
         # PyTorch's transformer encoder
         self.transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
@@ -35,9 +41,15 @@ class DecisionTransformer(nn.Module):
             num_layers=3
         )
 
+        # CNNs for encoding grid and block observations
+        self.grid_cnn = GridEncoder()
+        self.block_cnn = BlockEncoder()
+        self.res_mlp = ResidualMLP(self.hidden_dim, self.hidden_dim)
+ 
+        # Define linear layers
         self.embed_timestep = nn.Embedding(max_episode_length, self.hidden_dim)
         self.embed_action = nn.Linear(self.action_dim, self.hidden_dim)
-        self.embed_state = nn.Linear(self.state_dim, self.hidden_dim)
+        self.embed_state = ObservationEncoder(self.grid_cnn, self.block_cnn, self.res_mlp, self.grid_size, self.block_size)
         self.embed_return = nn.Linear(1, self.hidden_dim)
 
         self.embed_ln = nn.LayerNorm(self.hidden_dim)
@@ -56,11 +68,17 @@ class DecisionTransformer(nn.Module):
         """
         Perform a forward pass through the transformer.
 
-        states: shape (batch_size, seq_length, state_dim)
-        actions: shape (batch_size, seq_length, action_dim)
-        returns_to_go: shape (batch_size, seq_length, 1)
-        timesteps: shape (batch_size, seq_length)
-        attention_mask: shape (batch_size, seq_length)
+        Args:
+            states (torch.Tensor): shape (batch_size, seq_length, state_dim)
+            actions (torch.Tensor): shape (batch_size, seq_length, action_dim)
+            returns_to_go (torch.Tensor): shape (batch_size, seq_length, 1)
+            timesteps (torch.Tensor): shape (batch_size, seq_length)
+            attention_mask (torch.Tensor): shape (batch_size, seq_length)
+
+        Returns:
+            return_preds (torch.Tensor): shape (batch_size, seq_length, 1)
+            state_preds (torch.Tensor): shape (batch_size, seq_length, state_dim)
+            action_preds (torch.Tensor): shape (batch_size, seq_length, action_dim)
         """
 
         batch_size, seq_length = states.shape[:2]
@@ -112,14 +130,20 @@ class DecisionTransformer(nn.Module):
 
         return return_preds, state_preds, action_preds
     
+    
     def get_action(self, states: torch.Tensor, actions: torch.Tensor, returns_to_go: torch.Tensor, timesteps: torch.Tensor):
         """
         Get the action prediction for a given state, action, return, and timestep. Used for evaluation.
+        If batch size > 1, the sequences are simply concatenated along the batch dimension.
 
-        states: shape (batch_size=1, seq_length, state_dim)
-        actions: shape (batch_size=1, seq_length, action_dim)
-        returns_to_go: shape (batch_size=1, seq_length, 1)
-        timesteps: shape (batch_size=1, seq_length)
+        Args:
+            states (torch.Tensor): shape (batch_size, seq_length, state_dim)
+            actions (torch.Tensor): shape (batch_size, seq_length, action_dim)
+            returns_to_go (torch.Tensor): shape (batch_size, seq_length, 1)
+            timesteps (torch.Tensor): shape (batch_size, seq_length)
+
+        Returns:
+            action_pred (torch.Tensor): Predicted action, still one-hot encoded, shape (action_dim,)
         """
 
         # Reshape inputs to fit the model in case batch_size != 1
@@ -162,3 +186,24 @@ class DecisionTransformer(nn.Module):
 
         # Return last action prediction
         return action_preds[0, -1] # return last action prediction
+
+if __name__ == "__main__":
+    # Test the model
+    batches = 2
+    seq_length = 10
+    state_dim = 175
+    action_dim = 23
+    model = DecisionTransformer(state_dim, action_dim, max_length=10)
+    states = torch.rand(batches, seq_length, state_dim)
+    actions = torch.rand(batches, seq_length, action_dim)
+    returns_to_go = torch.rand(batches, seq_length, 1)
+    timesteps = torch.arange(seq_length).repeat(batches, 1)
+    return_preds, state_preds, action_preds = model(states, actions, returns_to_go, timesteps)
+    print(return_preds.shape)
+    print(state_preds.shape)
+    print(action_preds.shape)
+    
+    # Make sure we have no nans
+    assert not torch.isnan(return_preds).any()
+    assert not torch.isnan(state_preds).any()
+    assert not torch.isnan(action_preds).any()
