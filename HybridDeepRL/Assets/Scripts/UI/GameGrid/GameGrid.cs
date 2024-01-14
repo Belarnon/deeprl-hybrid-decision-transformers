@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Assertions;
+using UnityEngine.Events;
 
 namespace PKB.UI
 {
@@ -51,6 +52,11 @@ namespace PKB.UI
         [Tooltip("Whether or not to recenter the grid when the grid is created or resized.")]
         [SerializeField]
         private bool recenterGrid = true;
+
+        /// <summary>
+        /// The <see cref="UnityEvent"/> invoked when a block is dropped on one of the grid cells.
+        /// </summary>
+        public UnityEvent<int, Vector2Int> onBlockDropped;
 
         #endregion
 
@@ -168,6 +174,10 @@ namespace PKB.UI
             Image image = cell.GetComponent<Image>();
             Assert.IsNotNull(image, "The grid cell prefab must have an Image component.");
             image.color = filled ? filledColor : emptyColor;
+            GridCell gridCellComponent = cell.GetComponent<GridCell>();
+            Assert.IsNotNull(gridCellComponent, "The grid cell prefab must have a GridCell component.");
+            gridCellComponent.SetCoordinates(new Vector2Int(x, y));
+            gridCellComponent.OnBlockDropped.AddListener((blockIndex, coordinates) => PropagateBlockDropped(blockIndex, coordinates));
             cells[x, y] = cell;
         }
 
@@ -181,6 +191,11 @@ namespace PKB.UI
             Vector2 gridSizePixels = new Vector2(gridSize.x * (cellSize.x + cellSpacing.x), gridSize.y * (cellSize.y + cellSpacing.y));
             Vector2 gridPosition = new Vector2(-gridSizePixels.x / 2.0f, -gridSizePixels.y / 2.0f);
             transform.localPosition = initialPosition + gridPosition;
+        }
+
+        private void PropagateBlockDropped(int blockIndex, Vector2Int coordinates)
+        {
+            onBlockDropped?.Invoke(blockIndex, coordinates);
         }
 
         #endregion

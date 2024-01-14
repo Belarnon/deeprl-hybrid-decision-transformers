@@ -72,7 +72,7 @@ namespace PKB.UI
                 BlockScriptableObject block = blocks[i];
                 if (block != null)
                 {
-                    blockRenderers[i].SetBlock(block);
+                    blockRenderers[i].SetBlock(block, i);
                 }
                 else
                 {
