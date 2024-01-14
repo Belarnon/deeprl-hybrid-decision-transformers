@@ -21,7 +21,7 @@ from evaluation.evaluate_episodes import evaluate_episode_rtg
 from modules.loss.action_crossentropy import TenTenCEActionLoss
 from modules.loss.action_loglikelihood import TenTenNLLActionLoss
 from networks.decision_transformer import DecisionTransformer
-from utils.training_utils import find_best_device, encode_actions, decode_actions, setup_wandb
+from utils.training_utils import find_best_device, encode_actions, setup_wandb
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -254,7 +254,7 @@ def training():
     # load the environment
     print("Waiting for Unity environment...")
     env = UnityEnvironment(seed=randint(0, 2**16))
-    env = UnityToGymWrapper(env, allow_multiple_obs=True)
+    env = UnityToGymWrapper(env)
     print("Unity environment started successfully! Starting training...")
 
     # start training loop

@@ -93,7 +93,6 @@ def evaluate_episode_rtg(
     for e in range(nr_episodes):
 
         state = env.reset()
-        state = state[0] # state is given inside a list for some reason
     
         # we keep all the histories on the device
         # note that the latest action and reward will be "padding"
@@ -131,7 +130,6 @@ def evaluate_episode_rtg(
             action = action.detach().cpu().numpy()
 
             state, reward, done, _ = env.step(action)
-            state = state[0]
             reward = torch.tensor(reward)
 
             cur_state = torch.from_numpy(state).to(device=device).reshape(1, state_dim)
