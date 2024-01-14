@@ -1,0 +1,13 @@
+{
+    "expert_trajectories" : [
+        "dataset/singles/demonstration_0.json",
+        "dataset/singles/demonstration_1.json",
+        "dataset/singles/game_session.json"
+    ],
+    "expert_trajectories_0" : [
+        "dataset/singles/demonstration_0.json",
+        "dataset/singles/demonstration_1.json",
+        "dataset/singles/game_session.json",
+        "dataset/singles/game_session_0.json"
+    ]
+}

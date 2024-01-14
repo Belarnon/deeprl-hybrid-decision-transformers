@@ -308,15 +308,19 @@ def visualize_board_evolution(
 
 
 if __name__ == '__main__':
-    dataset = load_dataset('dataset/evaluation/evaluation_1.json')
-    visualize_board_evolution(dataset, title='Board Evolution')
+    
+    visualize = False
+    
+    if visualize:
+        dataset = load_dataset('dataset/evaluation/evaluation_1.json')
+        visualize_board_evolution(dataset, title='Board Evolution')
 
-    if False: 
-        dataset_paths = [
-            'dataset/demonstration_0.json',
-            'dataset/demonstration_1.json',
-            'dataset/game_session.json'
-        ]
+    else:
+        manifest = "dataset/manifest.json"
+        merged_dataset = "expert_trajectories_0"
+        with open(manifest) as f:
+            ds = json.load(f)
+            dataset_paths = ds[merged_dataset]
 
-        merged_dataset_path = 'dataset/expert_trajectories.json'
+        merged_dataset_path = 'dataset/training/' + merged_dataset + ".json"
         merge_datasets_files(dataset_paths, merged_dataset_path)
