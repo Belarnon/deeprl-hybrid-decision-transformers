@@ -1,9 +1,11 @@
 import torch
 
-class TenTenCEActionLoss(torch.nn.Module):
+from modules.diag_gaussian_actor import SquashedNormal
+
+class TenTenNLLActionLoss(torch.nn.Module):
     """
     Custom loss function for a 1010! action prediction task. This loss function
-    is used for the offline training of the actor network.
+    is used for the online training of the actor network.
     """
 
     def __init__(self, block_selection_dim: int = 3, x_dim: int = 10):
@@ -11,11 +13,11 @@ class TenTenCEActionLoss(torch.nn.Module):
         self.block_selection_dim = block_selection_dim
         self.x_dim = x_dim
 
-        self.partial_loss_fn = torch.nn.CrossEntropyLoss()
+        self.partial_loss_fn = torch.nn.NLLLoss()()
 
     def forward(self, y_hat: torch.Tensor, y: torch.Tensor):
         """
-        Use the cross entropy function to calculate the loss independently
+        Use the log likelihood function to calculate the loss independently
         for each subsection of the action vector and add them together.
         The subsections are:
 
@@ -33,17 +35,17 @@ class TenTenCEActionLoss(torch.nn.Module):
             torch.Tensor: loss
         """
 
-        selection_loss = self.partial_loss_fn(
+        selection_loss = self._partial_log_likelihood(
             self._get_selection_vector(y_hat),
             self._get_selection_vector(y)
         )
 
-        x_loss = self.partial_loss_fn(
+        x_loss = self._partial_log_likelihood(
             self._get_x_vector(y_hat),
             self._get_x_vector(y)
         )
 
-        y_loss = self.partial_loss_fn(
+        y_loss = self._partial_log_likelihood(
             self._get_y_vector(y_hat),
             self._get_y_vector(y)
         )

@@ -18,7 +18,8 @@ from transformers.models.decision_transformer.modeling_decision_transformer impo
 
 from dataset.trajectory_dataset import TrajectoryDataset
 from evaluation.evaluate_episodes import evaluate_episode_rtg
-from modules.loss.action_crossentropy import TenTenActionLoss
+from modules.loss.action_crossentropy import TenTenCEActionLoss
+from modules.loss.action_loglikelihood import TenTenNLLActionLoss
 from networks.decision_transformer import DecisionTransformer
 from utils.training_utils import find_best_device, encode_actions, decode_actions, setup_wandb
 
@@ -242,7 +243,9 @@ def training():
     )
 
     if args.loss_fn == "CE":
-        loss_fn = TenTenActionLoss()
+        loss_fn = TenTenCEActionLoss()
+    elif args.loss_fn == "NLL":
+        loss_fn = TenTenNLLActionLoss()
     elif args.loss_fn == "MSE":
         loss_fn = lambda y_hat, y: torch.mean((y_hat - y)**2)
     else:
