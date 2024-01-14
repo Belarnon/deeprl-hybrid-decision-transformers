@@ -30,11 +30,27 @@ namespace PKB.UI
         [Tooltip("If set, this block will be rendered by default (optional).")]
         public BlockScriptableObject defaultBlock;
 
+        /// <summary>
+        /// The parent <see cref="RectTransform"/> to use for the tiles.
+        /// </summary>
+        /// <remarks>
+        /// This will be dragged around to move the entire tile.
+        /// </remarks>
+        [Tooltip("The parent RectTransform to use for the tiles.")]
+        [SerializeField]
+        private RectTransform tileParent;
+
+        
+
         #endregion
 
         #region Internal State
 
         private BlockScriptableObject currentBlock;
+
+        private int currentBlockIndex;
+        
+        private bool blockDirty = false;
 
         #endregion
 
@@ -49,6 +65,15 @@ namespace PKB.UI
             }
         }
 
+        private void Update()
+        {
+            if (blockDirty)
+            {
+                UpdateBlock();
+                blockDirty = false;
+            }
+        }
+
         #endregion
 
         #region Public Interface
@@ -57,16 +82,18 @@ namespace PKB.UI
         /// Sets the block to render.
         /// </summary>
         /// <param name="block">The block to render.</param>
-        public void SetBlock(BlockScriptableObject block)
+        public void SetBlock(BlockScriptableObject block, int index = -1)
         {
             currentBlock = block;
-            UpdateBlock();
+            currentBlockIndex = index;
+            blockDirty = true;
         }
 
         public void ClearBlock()
         {
             currentBlock = null;
-            UpdateBlock();
+            currentBlockIndex = -1;
+            blockDirty = true;
         }
 
         #endregion
@@ -87,7 +114,7 @@ namespace PKB.UI
 
         private void RemoveBlock()
         {
-            foreach (Transform child in transform)
+            foreach (Transform child in tileParent.transform)
             {
                 Destroy(child.gameObject);
             }
@@ -97,18 +124,17 @@ namespace PKB.UI
         {
             Vector2Int center = currentBlock.getCenter();
             Vector2 centerOffset = ComputeCenterOffset(center);
-            DrawCell(center, centerOffset);
             foreach (Vector2Int offset in currentBlock.getBlockOffsets())
             {
-                DrawCell(center + offset, centerOffset);
+                DrawCell(center + offset, offset, centerOffset);
             }
         }
 
-        private void DrawCell(Vector2Int coordinates, Vector2 offset = default)
+        private void DrawCell(Vector2Int coordinates, Vector2Int coordinateCenterOffset, Vector2 offset = default)
         {
             // Create a new child with an image component.
-            GameObject cell = new GameObject($"Cell ({coordinates.x}, {coordinates.y})");
-            cell.transform.SetParent(transform);
+            GameObject cell = new($"Cell ({coordinates.x}, {coordinates.y})");
+            cell.transform.SetParent(tileParent.transform);
             Image image = cell.AddComponent<Image>();
 
             // Set the tile image and color.
@@ -122,6 +148,11 @@ namespace PKB.UI
                 coordinates.x * (tileStyle.cellSize.x + tileStyle.cellOffset.x),
                 coordinates.y * (tileStyle.cellSize.y + tileStyle.cellOffset.y)
             ) + offset;
+
+            // Add a tile cell component and configure it.
+            TileCell tileCell = cell.AddComponent<TileCell>();
+            tileCell.SetCenterOffset(coordinateCenterOffset);
+            tileCell.SetBlockIndex(currentBlockIndex);
         }
 
         private Vector2 ComputeCenterOffset(Vector2Int centerCoordinates)
@@ -136,6 +167,7 @@ namespace PKB.UI
         {
             // Make sure the cell prefab is set.
             Assert.IsNotNull(tileStyle, "Tile style must be set.");
+            Assert.IsNotNull(tileParent, "Tile parent must be set.");
         }
 
         #endregion
