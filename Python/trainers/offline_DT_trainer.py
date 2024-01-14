@@ -4,6 +4,7 @@ from torch import nn
 from torch.utils.data import DataLoader, random_split
 
 import os
+from random import randint
 import argparse
 import pyfiglet
 from safetensors.torch import save_model, load_model
@@ -19,7 +20,7 @@ from dataset.trajectory_dataset import TrajectoryDataset
 from evaluation.evaluate_episodes import evaluate_episode_rtg
 from modules.loss.action_crossentropy import TenTenActionLoss
 from networks.decision_transformer import DecisionTransformer
-from utils.training_utils import find_best_device, encode_actions, decode_actions
+from utils.training_utils import find_best_device, encode_actions, decode_actions, setup_wandb
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -127,33 +128,27 @@ def parse_args():
                         help="Shuffle the dataset before training.", default=True)
     parser.add_argument("-v", "--verbose", type=bool,
                         help="Enable verbose output.", default=False)
-    parser.add_argument("-gpu", "--use_gpu", type=bool,
+    parser.add_argument("-gpu", "--use_gpu", type=boolean_type,
                         help="Enable training on gpu device.", default=True)
-    parser.add_argument("-wb", "--wandb", type=boolean_type,
-                        help="Enable logging with wandb.", default=True)
+    
     
     # OUTPUT
+    def list_type(s):
+        return list(map(str, s.split(',')))
     parser.add_argument("-moddir", "--model_dir", type=str,
                         help="The folder to use for saving the model.", required=True)
     parser.add_argument("-se", "--save_every", type=int,
                         help="Save the model every n epochs.", default=1)
+    parser.add_argument("-wb", "--wandb", type=boolean_type,
+                        help="Enable logging with wandb.", default=True)
+    parser.add_argument("-wbnm", "--wb_name", type=str,
+                        help="Name given for the wandb logger.", required=True)
+    parser.add_argument("-wbno", "--wb_notes", type=str,
+                        help="Notes given for the wandb logger.", required=True)
+    parser.add_argument("-wbt", "--wb_tags", type=list_type,
+                        help="List of tags for the wandb logger.", required=True)
 
     return parser.parse_args()
-
-def setup_wandb(args: argparse.Namespace) -> None:
-    """
-    Set up Weights and Biases for logging.
-    """
-    arg_dict = vars(args)
-
-    wandb.init(
-        project="DeepLearning-HDT",
-        name=f"offline_validated_expert_trajectories_{wandb.util.generate_id()}",
-        notes="Offline validated strided run on the new expert trajectories and separate validation set.",
-        tags=["stppcd", "stride", "pretraining", "offline"],
-        config=arg_dict,
-        mode="online" if args.wandb else "disabled"
-    )
 
 def training():
     # print banner and parse arguments
@@ -252,9 +247,10 @@ def training():
         loss_fn = lambda y_hat, y: torch.mean((y_hat - y)**2)
     else:
         raise NotImplementedError(f"Unknown loss function {args.loss_fn}!")
-    
+
+    # load the environment
     print("Waiting for Unity environment...")
-    env = UnityEnvironment()
+    env = UnityEnvironment(seed=randint(0, 2**16))
     env = UnityToGymWrapper(env, allow_multiple_obs=True)
     print("Unity environment started successfully! Starting training...")
 
@@ -361,33 +357,29 @@ def training():
     # save final model and optimizer
     save_model(model, os.path.join(args.model_dir, "model_final.safetensors"))
 
-    # return
+    # evaluation
 
-    # evaluate model
-    print("Evaluating model...")
-    
+    print("Start Evaluation:")
+
+    # start evaluating loop
     with torch.no_grad():
-        episode_return, episode_length = evaluate_episode_rtg(
+        episodes_returns, episodes_lengths = evaluate_episode_rtg(
             env,
             args.state_dim,
             action_dim,
             model,
-            args.max_ep_len,
-            scale=1000.,
-            state_mean=0.,
-            state_std=1.,
-            device=device,
+            device,
             target_return=40.,
-            mode='normal',
+            nr_episodes=10,
             action_space=action_space,
-            use_huggingface=args.hugging_transformer
+            use_huggingface=args.hugging_transformer,
         )
 
-    print(f"Average return: {episode_return}, average length: {episode_length}")
-    
+    print(f"Average return and std: {episodes_returns.mean()},{episodes_returns.std()},\naverage length and std: {episodes_lengths.mean()},{episodes_lengths.std()}")
+
     wandb.log({
-    "eval/episode_return": episode_return,
-    "eval/episode_length": episode_length
+        "eval/ep_returns" : wandb.Histogram(episodes_returns.cpu()),
+        "eval/ep_lengths" : wandb.Histogram(episodes_lengths.cpu())
     })
 
 if __name__=="__main__":

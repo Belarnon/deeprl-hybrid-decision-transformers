@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+import wandb
+import argparse
 
 def find_best_device(use_gpu: bool = False) -> torch.device:
     # Check if we should use the CPU
@@ -64,3 +66,18 @@ def decode_actions(action_batch: torch.Tensor, action_space=(3,10,10)):
             decoded_actions[i, j, :] = act
 
     return decoded_actions
+
+def setup_wandb(args: argparse.Namespace) -> None:
+    """
+    Set up Weights and Biases for logging.
+    """
+    arg_dict = vars(args)
+
+    wandb.init(
+        project="DeepLearning-HDT",
+        name=f"{args.wb_name}_{wandb.util.generate_id()}",
+        notes=args.wb_notes,
+        tags=args.wb_tags,
+        config=arg_dict,
+        mode="online" if args.wandb else "disabled"
+    )
