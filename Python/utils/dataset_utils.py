@@ -1,13 +1,18 @@
 from matplotlib import pyplot as plt
 import matplotlib.animation as animation
-from typing import List, Any
+from typing import List
 from tqdm import tqdm
 import numpy as np
+import torch
 import json
+from tensordict import TensorDict
+from .replay_buffers.replay_buffer import AbstractReplayBuffer
 
 __TRAJECTORY_KEY = 'trajectories'
 __TRANSITION_KEY = 'transitions'
 __OBSERVATION_KEY = 'observation'
+__ACTION_KEY = 'action'
+__DISCRETE_ACTION_KEY = 'discreteActions'
 __CUMULATIVE_REWARD_KEY = 'reward'
 
 # DATASET LOADING AND HANDLING
@@ -37,6 +42,21 @@ def save_dataset(dataset: dict, dataset_path: str) -> None:
     """
     with open(dataset_path, 'w') as f:
         json.dump(dataset, f)
+
+def remove_empty_trajectories(dataset: dict) -> dict:
+    """
+    Remove empty trajectories from the dataset.
+
+    Args:
+        dataset (dict): The dataset.
+
+    Returns:
+        dict: The dataset without empty trajectories.
+    """
+    trajectories: List[dict] = dataset[__TRAJECTORY_KEY]
+    trajectories = [trajectory for trajectory in trajectories if len(trajectory[__TRANSITION_KEY]) > 0]
+    dataset[__TRAJECTORY_KEY] = trajectories
+    return dataset
 
 def extract_cumulative_reward_series(dataset: dict) -> np.ndarray:
     """
@@ -174,6 +194,83 @@ def merge_datasets_files(dataset_paths: List[str], merged_dataset_path: str) -> 
     save_dataset(merged_dataset, merged_dataset_path)
 
 
+# REPLAY BUFFER PRIMING
+# ---------------------
+    
+def trajectory_to_tensor_dict(trajectory: dict) -> TensorDict:
+    """
+    Convert a trajectory to a TensorDict.
+
+    Args:
+        trajectory (dict): The trajectory.
+
+    Returns:
+        TensorDict: The trajectory as a TensorDict.
+    """
+    transitions: List[dict] = trajectory[__TRANSITION_KEY]
+    sequence_length = len(transitions)
+
+    # Find the specification of the observation and action tensors
+    observation_vec_dim = len(transitions[0][__OBSERVATION_KEY])
+    action_vec_dim = len(transitions[0][__ACTION_KEY][__DISCRETE_ACTION_KEY])
+    
+    # Create the tensors
+    observation_tensor = torch.zeros((sequence_length, observation_vec_dim))
+    action_tensor = torch.zeros((sequence_length, action_vec_dim))
+    reward_tensor = torch.zeros((sequence_length,))
+
+    # Get cumulative reward
+    cumulative_rewards = []
+    for transition in transitions:
+        cumulative_rewards.append(transition[__CUMULATIVE_REWARD_KEY])
+    cumulative_rewards = np.array(cumulative_rewards)
+
+    # Convert the cumulative rewards to reward deltas
+    reward_deltas = compute_reward_deltas(cumulative_rewards)
+
+    # Fill the tensors
+    for i, transition in enumerate(transitions):
+        observation_tensor[i] = torch.tensor(transition[__OBSERVATION_KEY])
+        action_tensor[i] = torch.tensor(transition[__ACTION_KEY][__DISCRETE_ACTION_KEY])
+        reward_tensor[i] = torch.tensor(reward_deltas[i])
+
+    # Create the TensorDict
+    trajectory_tensor_dict = TensorDict({
+        'observations': observation_tensor,
+        'actions': action_tensor,
+        'rewards': reward_tensor
+    }, batch_size=[sequence_length])
+
+    return trajectory_tensor_dict
+    
+
+
+def prime_replay_buffer_from_dataset(replay_buffer: AbstractReplayBuffer, dataset: dict, sequence_count: int, verbose: bool = True) -> None:
+    """
+    Prime a replay buffer with the best trajectories of a dataset.
+
+    Args:
+        replay_buffer (AbstractReplayBuffer): The replay buffer to prime.
+        dataset (dict): The dataset to select the trajectories from.
+        sequence_count (int): The number of sequences to prime the replay buffer with.
+        verbose (bool, optional): Whether to print the progress. Defaults to True.
+    """
+    clean_dataset = remove_empty_trajectories(dataset)
+
+    trajectories: List[dict] = clean_dataset[__TRAJECTORY_KEY]
+    final_rewards = []
+    for trajectory in tqdm(trajectories, disable=not verbose):
+        transitions: List[dict] = trajectory[__TRANSITION_KEY]
+        final_rewards.append(transitions[-1][__CUMULATIVE_REWARD_KEY])
+
+    # Sort the trajectories by their final reward so that the best ones are first
+    sorted_trajectory_indices = np.argsort(final_rewards)[::-1]
+    for trajectory_index in tqdm(range(sequence_count), disable=not verbose):
+        trajectory = trajectories[sorted_trajectory_indices[trajectory_index]]
+        trajectory_tensor_dict = trajectory_to_tensor_dict(trajectory)
+        replay_buffer.add(trajectory_tensor_dict)
+
+
 # DATASET PLOTTING
 # ----------------
 
@@ -309,18 +406,37 @@ def visualize_board_evolution(
 
 if __name__ == '__main__':
     
-    visualize = False
+    # visualize = False
     
-    if visualize:
-        dataset = load_dataset('dataset/evaluation/evaluation_1.json')
-        visualize_board_evolution(dataset, title='Board Evolution')
+    # if visualize:
+    #     dataset = load_dataset('dataset/evaluation/evaluation_1.json')
+    #     visualize_board_evolution(dataset, title='Board Evolution')
 
-    else:
-        manifest = "dataset/manifest.json"
-        merged_dataset = "valid_together_0"
-        with open(manifest) as f:
-            ds = json.load(f)
-            dataset_paths = ds[merged_dataset]
+    # else:
+    #     manifest = "dataset/manifest.json"
+    #     merged_dataset = "valid_together_0"
+    #     with open(manifest) as f:
+    #         ds = json.load(f)
+    #         dataset_paths = ds[merged_dataset]
 
-        merged_dataset_path = 'dataset/validation/' + merged_dataset + ".json"
-        merge_datasets_files(dataset_paths, merged_dataset_path)
+    #     merged_dataset_path = 'dataset/validation/' + merged_dataset + ".json"
+    #     merge_datasets_files(dataset_paths, merged_dataset_path)
+
+    # Test replay buffer priming
+    dataset = load_dataset('dataset/training/expert_trajectories_1.json')
+
+    from .replay_buffers.list_replay_buffer import ListReplayBuffer
+
+    replay_buffer = ListReplayBuffer(2, 1)
+
+    prime_replay_buffer_from_dataset(replay_buffer, dataset, 2)
+
+    for i, batch in enumerate(replay_buffer):
+        print(i, batch)
+        observations = batch[0]['observations']
+        print(observations)
+        actions = batch[0]['actions']
+        print(actions)
+        rewards = batch[0]['rewards']
+        print(rewards)
+
