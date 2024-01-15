@@ -17,6 +17,14 @@
         "dataset/singles/game_session_1.json",
         "dataset/singles/game_session_2.json"
     ],
+    "expert_trajectories_2" : [
+        "dataset/singles/demonstration_0.json",
+        "dataset/singles/demonstration_1.json",
+        "dataset/singles/game_session_0.json",
+        "dataset/singles/game_session_1.json",
+        "dataset/singles/game_session_2.json",
+        "dataset/singles/last_datasets.json"
+    ],
     "valid_together_0" : [
         "dataset/validation/valid_short.json",
         "dataset/validation/valid_long.json"
