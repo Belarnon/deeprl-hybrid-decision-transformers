@@ -132,11 +132,11 @@ class TrajectoryDataset(Dataset):
         #pad from left with zeros to max_subseq_length
         pad_steps = self.max_subseq_length - seq_len
 
-        states = np.concatenate([np.zeros((pad_steps, state_dim)), states])
-        actions = np.concatenate([np.zeros((pad_steps, action_dim)), actions])
-        rewards = np.concatenate([np.zeros((pad_steps, reward_dim)), rewards])
-        timesteps = np.concatenate([np.zeros(pad_steps), timesteps])
-        attention_mask = np.concatenate([np.ones(pad_steps), np.zeros(seq_len)])
+        states = np.concatenate([states, np.zeros((pad_steps, state_dim))])
+        actions = np.concatenate([actions, np.zeros((pad_steps, action_dim))])
+        rewards = np.concatenate([rewards, np.zeros((pad_steps, reward_dim))])
+        timesteps = np.concatenate([timesteps, np.zeros(pad_steps)])
+        attention_mask = np.concatenate([np.zeros(seq_len), np.ones(pad_steps)])
 
         states = torch.from_numpy(states).float()
         actions = torch.from_numpy(actions).float()

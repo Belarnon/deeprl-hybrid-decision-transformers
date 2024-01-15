@@ -97,7 +97,7 @@ class DecisionTransformer(nn.Module):
         self.predict_state = nn.Linear(hidden_dim, self.state_dim)
 
 
-    def forward(self, states: torch.Tensor, actions: torch.Tensor, returns_to_go: torch.Tensor, timesteps: torch.Tensor, attention_mask: torch.Tensor=None):
+    def forward(self, states: torch.Tensor, actions: torch.Tensor, returns_to_go: torch.Tensor, timesteps: torch.Tensor, padding_masks: torch.Tensor=None):
         """
         Perform a forward pass through the transformer.
 
@@ -106,7 +106,7 @@ class DecisionTransformer(nn.Module):
             actions (torch.Tensor): shape (batch_size, seq_length, action_dim)
             returns_to_go (torch.Tensor): shape (batch_size, seq_length, 1)
             timesteps (torch.Tensor): shape (batch_size, seq_length)
-            attention_mask (torch.Tensor): shape (batch_size, seq_length)
+            padding_masks (torch.Tensor): shape (batch_size, seq_length)
 
         Returns:
             return_preds (torch.Tensor): shape (batch_size, seq_length, 1)
@@ -116,9 +116,13 @@ class DecisionTransformer(nn.Module):
 
         batch_size, seq_length = states.shape[:2]
 
-        if attention_mask is None:
-            # attention mask for GPT: 1 if can be attended to, 0 if not
-            attention_mask = torch.ones((batch_size, seq_length), dtype=torch.long).to(states.device)
+        # Padding masks are used to mask out padding tokens in the transformer
+        if padding_masks is None:
+            # attention mask for nn.TransformerEncoder: 0 if can be attended to, 1 if not
+            padding_masks = torch.zeros((batch_size, seq_length), dtype=torch.long).to(states.device)
+        
+        # Attention mask for ignoring future states. Upper triangular matrix with above-diagonal elements set to 1
+        attention_mask = nn.Transformer.generate_square_subsequent_mask(3 * seq_length).to(states.device)
 
         # embed each modality with a different head
         timestep_embeddings = self.embed_timestep(timesteps) # shape (batch_size, seq_length, hidden_dim)
@@ -137,19 +141,19 @@ class DecisionTransformer(nn.Module):
         ).permute(0, 2, 1, 3).reshape(batch_size, 3*seq_length, self.hidden_dim) # shape (batch_size, 3*seq_length, hidden_dim)
         embeddings = self.embed_ln(embeddings)
 
-        # do the same for the attention mask
-        attention_mask = torch.stack(
-            (attention_mask, attention_mask, attention_mask), dim=1
+        # do the same for the padding mask
+        padding_masks = torch.stack(
+            (padding_masks, padding_masks, padding_masks), dim=1
         ).permute(0, 2, 1).reshape(batch_size, 3*seq_length)
 
-        # NOTE If the transformer_block is used as transformer, attention mask SHOULD NOT be converted to bool and repeated
         attention_mask = attention_mask.bool()
+        padding_masks = padding_masks.bool()
         if self.use_xformers:
-            attention_mask = ~attention_mask # xFormers uses 1 for attention and 0 for no attention
-            x = self.xformer(embeddings, encoder_input_mask=attention_mask)
+            padding_masks = ~padding_masks # xFormers uses 1 for attention and 0 for no attention
+            x = self.xformer(embeddings, encoder_input_mask=padding_masks)
         else:
             # since every sequence has its own attention mask vector we need to give it the transformer as mask
-            x = self.transformer(embeddings, src_key_padding_mask=attention_mask)
+            x = self.transformer(embeddings, is_causal=True, mask=attention_mask, src_key_padding_mask=padding_masks)
 
         # reshape x to reverse the stacking & interleaving
         # returns (0), states (1), or actions (2); i.e. x[:,1,t] is the token for s_t
