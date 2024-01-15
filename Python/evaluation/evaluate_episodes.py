@@ -90,15 +90,19 @@ def evaluate_episode_rtg(
     episodes_returns = torch.zeros(nr_episodes).to(device, dtype=torch.float32)
     episodes_lengths = torch.zeros(nr_episodes).to(device, dtype=torch.float32)
 
+    # for online training we need to keep track of the trajectory
+    # for now only the last one is saved, maybe save them all or the best in the future
+    trajectory = {}
+
     for e in range(nr_episodes):
 
         state = env.reset()
-        state = state[0] # state is given inside a list for some reason
     
         # we keep all the histories on the device
         # note that the latest action and reward will be "padding"
         states = torch.from_numpy(state).reshape(1, state_dim).to(device=device, dtype=torch.float32)
         actions = torch.zeros((0, action_dim), device=device, dtype=torch.float32)
+        actions_decoded = torch.zeros((0, len(action_space)), device=device, dtype=torch.float32)
         rewards = torch.zeros(0, device=device, dtype=torch.float32)
 
         returns_to_go = torch.tensor(target_return, device=device, dtype=torch.float32).reshape(1, 1)
@@ -109,6 +113,7 @@ def evaluate_episode_rtg(
         while True:
             # add padding
             actions = torch.cat([actions, torch.zeros((1, action_dim), device=device)], dim=0)
+            actions_decoded = torch.cat([actions_decoded, torch.zeros((1, len(action_space)), device=device)], dim=0)
             rewards = torch.cat([rewards, torch.zeros(1, device=device)])
 
             if use_huggingface:
@@ -128,10 +133,10 @@ def evaluate_episode_rtg(
                 )
             actions[-1] = action
             action = decode_actions(action.reshape(1, 1, -1), action_space)
+            actions_decoded[-1] = action
             action = action.detach().cpu().numpy()
 
             state, reward, done, _ = env.step(action)
-            state = state[0]
             reward = torch.tensor(reward)
 
             cur_state = torch.from_numpy(state).to(device=device).reshape(1, state_dim)
@@ -153,5 +158,18 @@ def evaluate_episode_rtg(
                 episodes_returns[e] = episode_return
                 episodes_lengths[e] = episode_length
                 break
+        
+        # Unity sends a final observation after the episode is done
+        # we need to remove this observation
+        states = states[:-1]
 
-    return episodes_returns, episodes_lengths
+        # save trajectory (only the last one is saved)
+        trajectory.update(
+            {
+                "observations": states, # shape (seq_len, state_dim)
+                "actions": actions_decoded, # shape (seq_len, len(action_space))
+                "rewards": rewards, # shape (seq_len,)
+            }
+        )
+
+    return episodes_returns, episodes_lengths, trajectory

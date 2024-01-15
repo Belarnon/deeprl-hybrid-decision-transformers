@@ -18,9 +18,10 @@ from transformers.models.decision_transformer.modeling_decision_transformer impo
 
 from dataset.trajectory_dataset import TrajectoryDataset
 from evaluation.evaluate_episodes import evaluate_episode_rtg
-from modules.loss.action_crossentropy import TenTenActionLoss
+from modules.loss.action_crossentropy import TenTenCEActionLoss
+from modules.loss.action_loglikelihood import TenTenNLLActionLoss
 from networks.decision_transformer import DecisionTransformer
-from utils.training_utils import find_best_device, encode_actions, decode_actions, setup_wandb
+from utils.training_utils import find_best_device, encode_actions, setup_wandb
 
 """
 Technically this is not a gym, as it does not use Unity ML Agents.
@@ -232,10 +233,6 @@ def training():
         ).to(device)
 
 
-    if args.load_model:
-        model.load_state_dict(load_model(args.load_model_dir))
-        model.eval()
-
     # setup optimizer, loss 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.StepLR(
@@ -245,7 +242,9 @@ def training():
     )
 
     if args.loss_fn == "CE":
-        loss_fn = TenTenActionLoss()
+        loss_fn = TenTenCEActionLoss()
+    elif args.loss_fn == "NLL":
+        loss_fn = TenTenNLLActionLoss()
     elif args.loss_fn == "MSE":
         loss_fn = lambda y_hat, y: torch.mean((y_hat - y)**2)
     else:
@@ -254,7 +253,7 @@ def training():
     # load the environment
     print("Waiting for Unity environment...")
     env = UnityEnvironment(seed=randint(0, 2**16))
-    env = UnityToGymWrapper(env, allow_multiple_obs=True)
+    env = UnityToGymWrapper(env)
     print("Unity environment started successfully! Starting training...")
 
     # start training loop
@@ -273,7 +272,7 @@ def training():
             timesteps = batch[3].to(device)
             attention_mask = batch[4].to(device)
 
-            actions_target = torch.clone(actions)
+            action_targets = torch.clone(actions)
 
             # reset gradients
             optimizer.zero_grad()
@@ -287,10 +286,10 @@ def training():
 
             # use attention mask on prediction and targets to select
             action_preds = action_preds[attention_mask < 1]
-            actions_target = actions_target[attention_mask < 1]
+            action_targets = action_targets[attention_mask < 1]
 
             # compute loss
-            loss = loss_fn(action_preds, actions_target)
+            loss = loss_fn(action_preds, action_targets)
             epoch_loss += loss.item()
             epoch_progress.set_postfix({"loss": loss.item()})
 
@@ -317,7 +316,7 @@ def training():
                 timesteps = batch[3].to(device)
                 attention_mask = batch[4].to(device)
 
-                actions_target = torch.clone(actions)
+                action_targets = torch.clone(actions)
 
                 # forward pass
                 if args.hugging_transformer:
@@ -328,10 +327,10 @@ def training():
 
                 # use attention mask on prediction and targets to select
                 action_preds = action_preds[attention_mask < 1]
-                actions_target = actions_target[attention_mask < 1]
+                action_targets = action_targets[attention_mask < 1]
 
                 # compute loss
-                loss = loss_fn(action_preds, actions_target)
+                loss = loss_fn(action_preds, action_targets)
                 val_loss += loss.item()
                 val_step += 1
 
@@ -366,14 +365,14 @@ def training():
 
     # start evaluating loop
     with torch.no_grad():
-        episodes_returns, episodes_lengths = evaluate_episode_rtg(
+        episodes_returns, episodes_lengths, _ = evaluate_episode_rtg(
             env,
             args.state_dim,
             action_dim,
             model,
             device,
             target_return=40.,
-            nr_episodes=10,
+            nr_episodes=2,
             action_space=action_space,
             use_huggingface=args.hugging_transformer,
         )
