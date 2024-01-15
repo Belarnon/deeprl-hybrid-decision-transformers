@@ -221,6 +221,9 @@ class DecisionTransformer(nn.Module):
         _, _, action_preds = self.forward(states, actions, returns_to_go, timesteps, attention_mask)
 
         # Return last action prediction
+        # Since we might have overwritten the action prediction layer, we need to check for that
+        if isinstance(action_preds, torch.distributions.Distribution):
+            return action_preds.sample()[0, -1] # return last action prediction
         return action_preds[0, -1] # return last action prediction
 
 if __name__ == "__main__":

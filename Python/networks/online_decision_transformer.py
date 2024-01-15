@@ -25,6 +25,7 @@ class OnlineDecisionTransformer(nn.Module):
             fancy_look_embedding=True, # whether to use state preprocessing using a CNN and more
             grid_size=10, # needed for fancy_look_embedding
             block_size=5, # needed for fancy_look_embedding
+            use_xformers=False, # whether to use the xformers library
             pretrained_path=None, # path to pretrained model
             init_temperature=0.1, # initial temperature for the action prediction
             target_entropy=None # target entropy for the action prediction
@@ -40,7 +41,8 @@ class OnlineDecisionTransformer(nn.Module):
             action_tanh=action_tanh,
             fancy_look_embedding=fancy_look_embedding,
             grid_size=grid_size,
-            block_size=block_size
+            block_size=block_size,
+            use_xformers=use_xformers
         )
 
         # Load the pretrained model
@@ -53,7 +55,7 @@ class OnlineDecisionTransformer(nn.Module):
         # Initialize the temperature
         self.log_temperature = torch.tensor(np.log(init_temperature))
         self.log_temperature.requires_grad = True
-        self.target_entropy = target_entropy
+        self.target_entropy = -action_dim if target_entropy is None else target_entropy
 
     def get_temperature(self):
         return self.log_temperature.exp()

@@ -102,6 +102,7 @@ def evaluate_episode_rtg(
         # note that the latest action and reward will be "padding"
         states = torch.from_numpy(state).reshape(1, state_dim).to(device=device, dtype=torch.float32)
         actions = torch.zeros((0, action_dim), device=device, dtype=torch.float32)
+        actions_decoded = torch.zeros((0, len(action_space)), device=device, dtype=torch.float32)
         rewards = torch.zeros(0, device=device, dtype=torch.float32)
 
         returns_to_go = torch.tensor(target_return, device=device, dtype=torch.float32).reshape(1, 1)
@@ -112,6 +113,7 @@ def evaluate_episode_rtg(
         while True:
             # add padding
             actions = torch.cat([actions, torch.zeros((1, action_dim), device=device)], dim=0)
+            actions_decoded = torch.cat([actions_decoded, torch.zeros((1, len(action_space)), device=device)], dim=0)
             rewards = torch.cat([rewards, torch.zeros(1, device=device)])
 
             if use_huggingface:
@@ -131,6 +133,7 @@ def evaluate_episode_rtg(
                 )
             actions[-1] = action
             action = decode_actions(action.reshape(1, 1, -1), action_space)
+            actions_decoded[-1] = action
             action = action.detach().cpu().numpy()
 
             state, reward, done, _ = env.step(action)
@@ -156,13 +159,16 @@ def evaluate_episode_rtg(
                 episodes_lengths[e] = episode_length
                 break
         
+        # Unity sends a final observation after the episode is done
+        # we need to remove this observation
+        states = states[:-1]
+
         # save trajectory (only the last one is saved)
-        cumulative_rewards = torch.cumsum(rewards, dim=0) # ( ͡° ͜ʖ ͡°)
         trajectory.update(
             {
-                "states": states.detach().cpu().numpy(), # shape (seq_len, state_dim)
-                "actions": actions.detach().cpu().numpy(),
-                "cumulative_rewards": cumulative_rewards.detach().cpu().numpy(), # return cumulative rewards so it's consistent with the unity trajectories
+                "observations": states, # shape (seq_len, state_dim)
+                "actions": actions_decoded, # shape (seq_len, len(action_space))
+                "rewards": rewards, # shape (seq_len,)
             }
         )
 

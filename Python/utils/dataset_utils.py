@@ -43,18 +43,19 @@ def save_dataset(dataset: dict, dataset_path: str) -> None:
     with open(dataset_path, 'w') as f:
         json.dump(dataset, f)
 
-def remove_empty_trajectories(dataset: dict) -> dict:
+def clean_trajectories(dataset: dict, min_length: int = 1) -> dict:
     """
     Remove empty trajectories from the dataset.
 
     Args:
         dataset (dict): The dataset.
+        min_length (int, optional): The minimum length of a trajectory. Defaults to 1.
 
     Returns:
         dict: The dataset without empty trajectories.
     """
     trajectories: List[dict] = dataset[__TRAJECTORY_KEY]
-    trajectories = [trajectory for trajectory in trajectories if len(trajectory[__TRANSITION_KEY]) > 0]
+    trajectories = [trajectory for trajectory in trajectories if len(trajectory[__TRANSITION_KEY]) >= min_length]
     dataset[__TRAJECTORY_KEY] = trajectories
     return dataset
 
@@ -245,7 +246,7 @@ def trajectory_to_tensor_dict(trajectory: dict) -> TensorDict:
     
 
 
-def prime_replay_buffer_from_dataset(replay_buffer: AbstractReplayBuffer, dataset: dict, sequence_count: int, verbose: bool = True) -> None:
+def prime_replay_buffer_from_dataset(replay_buffer: AbstractReplayBuffer, dataset: dict, sequence_count: int, min_seq_len: int, verbose: bool = True) -> None:
     """
     Prime a replay buffer with the best trajectories of a dataset.
 
@@ -253,11 +254,14 @@ def prime_replay_buffer_from_dataset(replay_buffer: AbstractReplayBuffer, datase
         replay_buffer (AbstractReplayBuffer): The replay buffer to prime.
         dataset (dict): The dataset to select the trajectories from.
         sequence_count (int): The number of sequences to prime the replay buffer with.
+        min_seq_len (int): The minimum length of a sequence for it to be considered.
         verbose (bool, optional): Whether to print the progress. Defaults to True.
     """
-    clean_dataset = remove_empty_trajectories(dataset)
+    clean_dataset = clean_trajectories(dataset, min_seq_len)
 
     trajectories: List[dict] = clean_dataset[__TRAJECTORY_KEY]
+    assert len(trajectories) >= sequence_count, f"Dataset does not contain enough trajectories of length at least {min_seq_len} to prime the replay buffer" + \
+        f" with {sequence_count} sequences."
     final_rewards = []
     for trajectory in tqdm(trajectories, disable=not verbose):
         transitions: List[dict] = trajectory[__TRANSITION_KEY]
@@ -429,7 +433,7 @@ if __name__ == '__main__':
 
     replay_buffer = ListReplayBuffer(2, 1)
 
-    prime_replay_buffer_from_dataset(replay_buffer, dataset, 2)
+    prime_replay_buffer_from_dataset(replay_buffer, dataset, 2, 30)
 
     for i, batch in enumerate(replay_buffer):
         print(i, batch)

@@ -54,7 +54,8 @@ class SquashedNormal(pyd.transformed_distribution.TransformedDistribution):
         self.std = std
         self.base_dist = pyd.Normal(loc, std)
 
-        transforms = [TanhTransform()]
+        transforms = [TanhTransform()] # squashed! # TODO: results in infinity values when calling the inverse on our one-hot encoded actions (1->inf)
+        transforms = [] # not so squashed anymore, eh?
         super().__init__(self.base_dist, transforms)
 
     @property

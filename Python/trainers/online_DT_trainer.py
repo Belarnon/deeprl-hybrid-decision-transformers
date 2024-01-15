@@ -1,29 +1,23 @@
 import torch
 import wandb
-from torch import nn
-from torch.utils.data import DataLoader, random_split
-from torchrl.data.replay_buffers import ReplayBuffer, ListStorage
 from tensordict import TensorDict
 
 import os
 from random import randint
 import argparse
 import pyfiglet
-from safetensors.torch import save_model, load_model
+from safetensors.torch import save_model
 from tqdm import tqdm
 
 from mlagents_envs.environment import UnityEnvironment
 from mlagents_envs.envs.unity_gym_env import UnityToGymWrapper
 
-import transformers
-from transformers.models.decision_transformer.modeling_decision_transformer import DecisionTransformerOutput
-
-from dataset.trajectory_dataset import TrajectoryDataset
 from evaluation.evaluate_episodes import evaluate_episode_rtg
 from modules.loss.action_crossentropy import TenTenCEActionLoss
 from modules.loss.action_loglikelihood import TenTenNLLActionLoss
 from networks.online_decision_transformer import OnlineDecisionTransformer
 from utils.training_utils import find_best_device, encode_actions, setup_wandb
+from utils.dataset_utils import load_dataset, prime_replay_buffer_from_dataset
 from utils.replay_buffers.list_replay_buffer import ListReplayBuffer
 
 def banner():
@@ -55,7 +49,7 @@ def parse_args():
     parser.add_argument("-dsval", "--dataset_validation", type=str,
                         help="The dataset to use as validation data.", default=None)
     parser.add_argument("-rbsz", "--replay_buffer_size", type=int,
-                        help="The size of the replay buffer.", default=100)
+                        help="The size of the replay buffer.", default=10)
     parser.add_argument("-b", "--batch_size", type=int,
                         help="The batch size to use for training.", default=16)
     # TRANSFORMER
@@ -89,7 +83,7 @@ def parse_args():
     parser.add_argument("-lm", "--load_model", type=bool,
                         help="Load the model", default=False)
     parser.add_argument("-lmd", "--load_model_dir", type=str,
-                        help="The filepath to the model that should be loaded.", required=True)
+                        help="The filepath to the pretrained model that should be loaded.", required=True)
     
     #   TRAINING ARGUMENTS
     
@@ -102,7 +96,7 @@ def parse_args():
     parser.add_argument("-lfn", "--loss_fn", type=str,
                         help="Name of loss function to use.", default="NLL")
     parser.add_argument("-maxonit", "--max_online_iterations", type=int,
-                        help="The maximum number of iterations for online training.", default=10) # low default value for testing
+                        help="The maximum number of iterations for online training.", default=100) # low default value for testing
     parser.add_argument("-k", "--context_length", type=int,
                         help="The context length (aka max_length) for the transformer.", default=30)
 
@@ -115,14 +109,14 @@ def parse_args():
                         help="Enable verbose output.", default=False)
     parser.add_argument("-gpu", "--use_gpu", type=bool,
                         help="Enable training on gpu device.", default=True)
-    parser.add_argument("-wb", "--wandb", type=boolean_type,
-                        help="Enable logging with wandb.", default=True)
     
     # OUTPUT
     def list_type(s):
         return list(map(str, s.split(',')))
     parser.add_argument("-moddir", "--model_dir", type=str,
                         help="The folder to use for saving the model.", required=True)
+    parser.add_argument("-se", "--save_every", type=int,
+                        help="Save the model every n epochs.", default=1)
     parser.add_argument("-wb", "--wandb", type=boolean_type,
                         help="Enable logging with wandb.", default=True)
     parser.add_argument("-wbnm", "--wb_name", type=str,
@@ -139,10 +133,6 @@ def training():
     banner()
     args = parse_args()
 
-    # check if no path for loading the model is given
-    if not args.load_model_dir:
-        raise ValueError("No path to pretrained model given! Pretrained model is required for online training.")
-
     # setup wandb
     setup_wandb(args)
 
@@ -152,8 +142,10 @@ def training():
     # create replay buffer
     replay_buffer = ListReplayBuffer(
         max_seq_num=args.replay_buffer_size,
-        batch_size=args.b,
+        batch_size=args.batch_size,
     )
+    dataset = load_dataset(args.dataset)
+    prime_replay_buffer_from_dataset(replay_buffer, dataset, args.replay_buffer_size, args.context_length)
 
     # create transformer / load model
     # max sequence length has to be that of the dataset, which
@@ -171,7 +163,7 @@ def training():
         grid_size=args.grid_size,
         block_size=args.block_size,
         use_xformers=args.use_xformers,
-
+        pretrained_path=args.load_model_dir,
     ).to(device)
 
 
@@ -199,14 +191,15 @@ def training():
         raise NotImplementedError(f"Unknown loss function {args.loss_fn}!")
     
     print("Waiting for Unity environment...")
-    env = UnityEnvironment(randint(0, 2**16))
+    env = UnityEnvironment(seed=randint(0, 1 << 16))
     env = UnityToGymWrapper(env)
     print("Unity environment started successfully! Starting training...")
 
 
     # training loop
     global_step = 0
-    for epoch in tqdm(range(args.max_online_iterations), desc="Epochs", unit="epoch", leave=True, position=0):
+    epoch_progress = tqdm(range(args.max_online_iterations), desc="Epochs", unit="epoch", leave=True, position=0)
+    for epoch in epoch_progress:
         """
         1. Get new trajectory from environment (evaluate_episode_rtg)
         2. Add trajectory to replay buffer
@@ -231,7 +224,7 @@ def training():
             model=model,
             device=device,
             target_return=40.,
-            min_ep_len=args.min_seq_len,
+            min_ep_len=args.context_length,
             action_space=action_space
         )
         model.train()
@@ -244,17 +237,18 @@ def training():
         # sample B trajectories according to sampling probalibity (implemented in replay buffer)
         # list[TensorDict]
 
-        for tau_batch in tqdm(replay_buffer, desc="Batches", unit="batch", leave=True, position=1):
+        for tau_batch in replay_buffer:
             # for each trajectory sample sub trajectory of length K
-            actions = torch.zeros(args.bs, args.context_length, args.act_dim).to(device)
-            states = torch.zeros(args.b, args.context_length, args.states_dim).to(device)
-            rewards = torch.zeros(args.b, args.context_length, 1).to(device)
-            timesteps = torch.linspace(0, args.context_length, args.context_length).to(device)
-            attention_mask = torch.ones(args.context_length)
+            actions = torch.zeros(args.batch_size, args.context_length, args.act_dim).to(device)
+            states = torch.zeros(args.batch_size, args.context_length, args.state_dim).to(device)
+            rewards = torch.zeros(args.batch_size, args.context_length, 1).to(device)
+            # torch arange, but start at 1
+            timesteps = torch.arange(1, args.context_length+1, device=device, dtype=torch.int32).repeat(args.batch_size, 1)
+            attention_mask = torch.zeros(args.batch_size, args.context_length).to(device)
 
             for i, tau in enumerate(tau_batch):
                 # get tau length from observation list
-                tau_len = len(tau['observations'])
+                tau_len = len(tau)
                 # compute possible starting range by difference with sub trajectory length K
                 max_idx = tau_len - args.context_length
                 # sample random
@@ -268,7 +262,7 @@ def training():
                 cum_reward = 0.0
                 for j in range(args.context_length-1, -1, -1):
                     cum_reward = delta_rewards[j]
-                    rewards[j] = cum_reward
+                    rewards[i,j] = cum_reward
 
             # loss + SGD on sub trajectories to update N(mu,std) in online decision transformer
             if args.act_enc:
@@ -277,13 +271,13 @@ def training():
             _, _, action_preds = model(states, actions, rewards, timesteps, attention_mask)
 
             # use attention mask on prediction and targets to select
-            action_preds = action_preds[attention_mask < 1]
-            action_targets = action_targets[attention_mask < 1]
+            action_targets = action_targets[attention_mask < 1].reshape_as(action_targets) # action_preds will be masked in loss function
             
             # compute loss
-            loss, log_likelihood, entropy = loss_fn(action_preds, action_targets, model.get_temperature().detach())
+            loss, log_likelihood, entropy = loss_fn(action_preds, action_targets, attention_mask, model.get_temperature().detach())
             epoch_loss += loss.item()
             epoch_step += 1
+            epoch_progress.set_postfix({"loss": loss.item()})
 
             log_temperature_optimizer.zero_grad()
             temperature_loss = (
@@ -335,7 +329,6 @@ def training():
             target_return=40.,
             nr_episodes=2,
             action_space=action_space,
-            use_huggingface=args.hugging_transformer,
         )
 
     print(f"Average return and std: {episodes_returns.mean()},{episodes_returns.std()},\naverage length and std: {episodes_lengths.mean()},{episodes_lengths.std()}")
@@ -378,7 +371,7 @@ def _collect_new_trajectory(
             )
     
     # return as tensordict
-    return TensorDict(trajectory)
+    return TensorDict(trajectory, batch_size=len(trajectory['observations']))
 
 if __name__=="__main__":
     training()
