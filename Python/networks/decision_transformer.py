@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 
 from modules.observation_encoder import ObservationEncoder, GridEncoder, BlockEncoder, ResidualMLP
-from utils.transformer_block import TransformerBlock
 
 class DecisionTransformer(nn.Module):
 

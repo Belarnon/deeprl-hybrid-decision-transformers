@@ -230,10 +230,6 @@ def training():
         ).to(device)
 
 
-    if args.load_model:
-        model.load_state_dict(load_model(args.load_model_dir))
-        model.eval()
-
     # setup optimizer, loss 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.StepLR(
@@ -273,7 +269,7 @@ def training():
             timesteps = batch[3].to(device)
             attention_mask = batch[4].to(device)
 
-            actions_target = torch.clone(actions)
+            action_targets = torch.clone(actions)
 
             # reset gradients
             optimizer.zero_grad()
@@ -287,10 +283,10 @@ def training():
 
             # use attention mask on prediction and targets to select
             action_preds = action_preds[attention_mask < 1]
-            actions_target = actions_target[attention_mask < 1]
+            action_targets = action_targets[attention_mask < 1]
 
             # compute loss
-            loss = loss_fn(action_preds, actions_target)
+            loss = loss_fn(action_preds, action_targets)
             epoch_loss += loss.item()
             epoch_progress.set_postfix({"loss": loss.item()})
 
@@ -317,7 +313,7 @@ def training():
                 timesteps = batch[3].to(device)
                 attention_mask = batch[4].to(device)
 
-                actions_target = torch.clone(actions)
+                action_targets = torch.clone(actions)
 
                 # forward pass
                 if args.hugging_transformer:
@@ -328,10 +324,10 @@ def training():
 
                 # use attention mask on prediction and targets to select
                 action_preds = action_preds[attention_mask < 1]
-                actions_target = actions_target[attention_mask < 1]
+                action_targets = action_targets[attention_mask < 1]
 
                 # compute loss
-                loss = loss_fn(action_preds, actions_target)
+                loss = loss_fn(action_preds, action_targets)
                 val_loss += loss.item()
                 val_step += 1
 
@@ -366,14 +362,14 @@ def training():
 
     # start evaluating loop
     with torch.no_grad():
-        episodes_returns, episodes_lengths = evaluate_episode_rtg(
+        episodes_returns, episodes_lengths, _ = evaluate_episode_rtg(
             env,
             args.state_dim,
             action_dim,
             model,
             device,
             target_return=40.,
-            nr_episodes=10,
+            nr_episodes=2,
             action_space=action_space,
             use_huggingface=args.hugging_transformer,
         )

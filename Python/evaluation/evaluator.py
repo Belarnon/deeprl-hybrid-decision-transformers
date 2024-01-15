@@ -126,7 +126,7 @@ def evaluate():
 
     # start evaluating loop
     with torch.no_grad():
-        episodes_returns, episodes_lengths = evaluate_episode_rtg(
+        episodes_returns, episodes_lengths, _ = evaluate_episode_rtg(
             env,
             args.state_dim,
             action_dim,

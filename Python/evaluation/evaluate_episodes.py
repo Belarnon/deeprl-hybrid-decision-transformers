@@ -90,6 +90,10 @@ def evaluate_episode_rtg(
     episodes_returns = torch.zeros(nr_episodes).to(device, dtype=torch.float32)
     episodes_lengths = torch.zeros(nr_episodes).to(device, dtype=torch.float32)
 
+    # for online training we need to keep track of the trajectory
+    # for now only the last one is saved, maybe save them all or the best in the future
+    trajectory = {}
+
     for e in range(nr_episodes):
 
         state = env.reset()
@@ -151,5 +155,15 @@ def evaluate_episode_rtg(
                 episodes_returns[e] = episode_return
                 episodes_lengths[e] = episode_length
                 break
+        
+        # save trajectory (only the last one is saved)
+        cumulative_rewards = torch.cumsum(rewards, dim=0) # ( ͡° ͜ʖ ͡°)
+        trajectory.update(
+            {
+                "states": states.detach().cpu().numpy(), # shape (seq_len, state_dim)
+                "actions": actions.detach().cpu().numpy(),
+                "cumulative_rewards": cumulative_rewards.detach().cpu().numpy(), # return cumulative rewards so it's consistent with the unity trajectories
+            }
+        )
 
-    return episodes_returns, episodes_lengths
+    return episodes_returns, episodes_lengths, trajectory
