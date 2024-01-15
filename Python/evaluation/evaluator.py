@@ -121,7 +121,7 @@ def evaluate():
     # load the environment
     print("Waiting for Unity environment...")
     env = UnityEnvironment(seed=randint(0, 2**16))
-    env = UnityToGymWrapper(env, allow_multiple_obs=True)
+    env = UnityToGymWrapper(env)
     print("Unity environment started successfully! Starting training...")
 
     # start evaluating loop
