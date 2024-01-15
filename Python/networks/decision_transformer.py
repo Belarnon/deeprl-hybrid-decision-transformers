@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from xformers.factory import xFormerConfig, xFormer
+
 from modules.observation_encoder import ObservationEncoder, GridEncoder, BlockEncoder, ResidualMLP
 from utils.transformer_block import TransformerBlock
 
@@ -16,32 +18,61 @@ class DecisionTransformer(nn.Module):
             action_tanh=True,
             fancy_look_embedding=True, # whether to use state preprocessing using a CNN and more
             grid_size=10, # needed for fancy_look_embedding
-            block_size=5 # needed for fancy_look_embedding
+            block_size=5, # needed for fancy_look_embedding
+            use_xformers=False, # whether to use xFormers instead of PyTorch's transformer
             ):
         super().__init__()
 
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.max_length = max_length
+        self.max_episode_length = max_episode_length
         self.hidden_dim = hidden_dim
 
         self.grid_size = grid_size
         self.block_size = block_size
         self.grid_size_squared = self.grid_size*self.grid_size
         self.block_size_squared = self.block_size*self.block_size
-        
-        # PyTorch's transformer encoder
-        self.transformer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=self.hidden_dim,
-                nhead=1,
-                dim_feedforward=4*self.hidden_dim,
-                dropout=0.1,
-                activation="gelu",
-                batch_first=True
-            ),
-            num_layers=3
-        )
+
+        self.use_xformers = use_xformers
+
+        if self.use_xformers:
+            # xFormers transformer encoder
+            config = xFormerConfig([{
+                "block_type": "encoder",
+                "num_layers": 3,
+                "dim_model": self.hidden_dim,
+                "residual_norm_style": "pre",  # Optional, pre/post
+                "multi_head_config": {
+                    "num_heads": 1,
+                    "residual_dropout": 0.1,
+                    "attention": {
+                        "name": "linformer",  # whatever attention mechanism
+                        "dropout": 0.1,
+                        "seq_len": 3 * self.max_length, # times 3 because on the attention level, we will have interleaved rtg, state, and action
+                    },
+                },
+                "feedforward_config": {
+                    "name": "MLP",
+                    "dropout": 0.1,
+                    "activation": "gelu",
+                    "hidden_layer_multiplier": 4,
+                },
+            }])
+            self.xformer = xFormer.from_config(config)
+        else:
+            # PyTorch's transformer encoder
+            self.transformer = nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(
+                    d_model=self.hidden_dim,
+                    nhead=1,
+                    dim_feedforward=4*self.hidden_dim,
+                    dropout=0.1,
+                    activation="gelu",
+                    batch_first=True
+                ),
+                num_layers=3
+            )
 
         # CNNs for encoding grid and block observations
         self.grid_cnn = GridEncoder()
@@ -49,7 +80,7 @@ class DecisionTransformer(nn.Module):
         self.res_mlp = ResidualMLP(self.hidden_dim, self.hidden_dim)
  
         # Define linear layers
-        self.embed_timestep = nn.Embedding(max_episode_length, self.hidden_dim)
+        self.embed_timestep = nn.Embedding(self.max_episode_length, self.hidden_dim)
         self.embed_action = nn.Linear(self.action_dim, self.hidden_dim)
         if fancy_look_embedding:
             self.embed_state = ObservationEncoder(self.grid_cnn, self.block_cnn, self.res_mlp, self.grid_size, self.block_size)
@@ -58,8 +89,6 @@ class DecisionTransformer(nn.Module):
         self.embed_return = nn.Linear(1, self.hidden_dim)
 
         self.embed_ln = nn.LayerNorm(self.hidden_dim)
-
-        # TODO change linear decoding for action for cross-entropy loss? edit: is this still relevant?
 
         self.predict_return = nn.Linear(self.hidden_dim, 1)
         self.predict_action = nn.Sequential(*(
@@ -116,11 +145,12 @@ class DecisionTransformer(nn.Module):
 
         # NOTE If the transformer_block is used as transformer, attention mask SHOULD NOT be converted to bool and repeated
         attention_mask = attention_mask.bool()
-        #if len(attention_mask.shape) == 2: # nn.Transformer expects either a (l,l) or (b,l,l) mask, but can't handle (b,l) masks
-        #    attention_mask = attention_mask.unsqueeze(1).repeat(1, attention_mask.shape[1], 1) # broadcast attention vector to matrix (copy row-wise)
-
-        # since every sequence has its own attention mask vector we need to give it the transformer as mask
-        x = self.transformer(embeddings, src_key_padding_mask=attention_mask)
+        if self.use_xformers:
+            attention_mask = ~attention_mask # xFormers uses 1 for attention and 0 for no attention
+            x = self.xformer(embeddings, encoder_input_mask=attention_mask)
+        else:
+            # since every sequence has its own attention mask vector we need to give it the transformer as mask
+            x = self.transformer(embeddings, src_key_padding_mask=attention_mask)
 
         # reshape x to reverse the stacking & interleaving
         # returns (0), states (1), or actions (2); i.e. x[:,1,t] is the token for s_t
