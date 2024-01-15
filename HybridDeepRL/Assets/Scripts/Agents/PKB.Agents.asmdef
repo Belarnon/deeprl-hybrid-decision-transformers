@@ -1,0 +1,19 @@
+{
+    "name": "PKB.Agents",
+    "rootNamespace": "PBK.Agents",
+    "references": [
+        "GUID:85e0054f8e64b47309646d35f8851f81",
+        "GUID:8a60fe9662ffdcd4db977638eabd5fe5",
+        "GUID:c0ca9b9539385da49b0ae9b2e6f95bb8",
+        "GUID:466b1e6a7828cc249bbf58e383ec2d8e"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -15,8 +15,6 @@ namespace GameLogic
             m_nrGivenBlocks = 3;
             m_blockAtlas = atlas;
             m_atlasSize = atlas.getAtlasSize();
-            string log = string.Format("atlas size {0}", m_atlasSize);
-            Debug.Log(log);
 			_setup();
         }
 
@@ -26,8 +24,6 @@ namespace GameLogic
             m_nrGivenBlocks = nrGivenBlocks;
             m_blockAtlas = atlas;
             m_atlasSize = atlas.getAtlasSize();
-            string log = string.Format("atlas size {0}", m_atlasSize);
-            Debug.Log(log);
             _setup();
         }
 
@@ -39,20 +35,25 @@ namespace GameLogic
         public bool gameIsSolvable() { return m_isSolvable; }
         public int getScore() { return m_score; }
         public bool[,] getGrid() { return m_grid; }
-        public List<BlockScriptableObject> getGivenBlocks() { return m_givenBlocks; }
+        public BlockScriptableObject[] getGivenBlocks() { return m_givenBlocks; }
         
         // Methods
         public bool putBlock(int index, Vector2Int center){
             // get the block at the index
-            Debug.Assert(0 <= index && index < m_givenBlocks.Count);
+            Debug.Assert(0 <= index && index < m_nrGivenBlocks);
             BlockScriptableObject block = m_givenBlocks[index];
+            // check if the chosen block is null i.e. no block at this index
+            if (block == null) { return false; }
             // check if the block can be set
             List<Vector2Int> offsets = block.getBlockOffsets();
             if (!_checkBlock(offsets, center)) { return false; }
             // else the block can be placed
             _setBlock(offsets, center);
+            // remove given block from list, i.e. setting to null
+            m_givenBlocks[index] = null;
+            // nrAvailable blocks is decreased in setblock!!!
             // if the list of given blocks is empty, sample new ones
-            if (m_givenBlocks.Count == 0) { _sampleNewBlocks(); }
+            if (m_nrAvailableBlocks == 0) { _sampleNewBlocks(); }
             // check solvability
             m_isSolvable = _checkSolvability();
             // return successful setting of block
@@ -82,10 +83,12 @@ namespace GameLogic
         // Fields and properties
         
         //private UnityEngine.Random rand = new UnityEngine.Random();
-        private int m_width, m_height, m_nrGivenBlocks, m_atlasSize;
+        // nrGivenBlocks: total number of blocks a player can choose from -> this many blocks are sampled after all before were set
+        // nrAvailableBlocks: number of not yet set blocks from the sampled ones -> is changed after setting/sampling blocks
+        private int m_width, m_height, m_nrGivenBlocks, m_nrAvailableBlocks, m_atlasSize;
 		private bool[,] m_grid;
         private BlockAtlasScriptableObject m_blockAtlas;
-        private List<BlockScriptableObject> m_givenBlocks;
+        private BlockScriptableObject[] m_givenBlocks;
         private bool m_isSolvable;
         private int m_score;
 
@@ -97,11 +100,20 @@ namespace GameLogic
             // setup the actual grid as a 2d boolean array
             // coordinates are (width, height)
             m_grid = new bool[m_width, m_height];
+            // setup array to store blocks
+            m_givenBlocks = new BlockScriptableObject[m_nrGivenBlocks];
+
+            for (int x=0; x < m_width; x++){
+                for (int y=0; y < m_height; y++){
+                    if (m_grid[x,y]) { Debug.Log($"already set gridcell at ({x},{y})!"); }
+                    m_grid[x,y] = false;
+                }
+            }
+
             // start while loop until the created game is solvable
             while (!m_isSolvable){
                 // create first nr_givenBlocks and fill it by randomly selecting
                 // blocks from the atlas
-                m_givenBlocks = new List<BlockScriptableObject>();
                 _sampleNewBlocks();
                 // check if its solvable; if not, reset the game
                 m_isSolvable = _checkSolvability();
@@ -109,13 +121,17 @@ namespace GameLogic
 		}
         private void _sampleNewBlocks(){
             for (int i=0; i<m_nrGivenBlocks; i++){
-                m_givenBlocks.Add(m_blockAtlas.getBlock(UnityEngine.Random.Range(0, m_atlasSize)));
+                m_givenBlocks[i] = m_blockAtlas.getBlock(UnityEngine.Random.Range(0, m_atlasSize));
             }
+            // reset number of available blocks
+            m_nrAvailableBlocks = m_nrGivenBlocks;
         }
         private bool _checkSolvability(){
             // iterate over all free gridpoints and available blocks and check if they can be set
-            // if there is a block and a center that work, return true
-            foreach (BlockScriptableObject block in m_givenBlocks){
+            // if there are a block and a center that work, return true
+            for (int i=0; i<m_nrGivenBlocks; i++){
+                BlockScriptableObject block = m_givenBlocks[i];
+                if (block == null) { continue; }
                 List<Vector2Int> offsets = block.getBlockOffsets();
                 for (int y=0; y < m_height; y++){
                     for (int x=0; x < m_width; x++){
@@ -139,6 +155,8 @@ namespace GameLogic
         private void _setBlock(List<Vector2Int> offsets, Vector2Int center){
             // place all gridPoints
             int scoreChange = 0;
+            // decrease number of available blocks
+            m_nrAvailableBlocks--;
             // meanwhile remember max/min indices for rows and cols to check for full line
             int min_width = m_width;
             int max_width = 0;
@@ -151,6 +169,8 @@ namespace GameLogic
                 max_width = Math.Max(max_width, gridPoint.x);
                 min_height = Math.Min(min_height, gridPoint.y);
                 max_height = Math.Max(max_height, gridPoint.y);
+                // change gridpoint value
+                m_grid[gridPoint.x, gridPoint.y] = true;
             }
             // check grid for full lines and delete them
             scoreChange += _deleteFullLines(min_width, max_width, min_height, max_height);
@@ -182,9 +202,15 @@ namespace GameLogic
                 // add row index to full_rows
                 if (colIsFull) { full_cols.Add(col); }
             }
-            // go over every col and line and delete the gridpoints
+            // go over every full row and delete the gridpoints
             foreach (int row in full_rows){
-                foreach (int col in full_cols){
+                for (int col=0; col<m_width; col++){
+                    m_grid[col, row] = false;
+                }
+            }
+            // go over every full col and delete the gridpoints
+            foreach (int col in full_cols){
+                for (int row=0; row<m_height; row++){
                     m_grid[col, row] = false;
                 }
             }

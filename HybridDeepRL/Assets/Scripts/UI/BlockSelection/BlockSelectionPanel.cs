@@ -35,9 +35,9 @@ namespace PKB.UI
 
         #region Internal State
 
-        private List<GameObject> blockPanels;
+        private List<GameObject> blockPanels = new();
 
-        private List<BlockRenderer> blockRenderers;
+        private List<BlockRenderer> blockRenderers = new();
 
         #endregion
 
@@ -46,7 +46,7 @@ namespace PKB.UI
         private void Awake()
         {
             CheckDependencies();
-            CreateBlockPanels();
+            ResetBlockPanels();
         }
 
         #endregion
@@ -63,15 +63,16 @@ namespace PKB.UI
             ResetBlockPanels();
         }
 
-        public void SetBlocks(List<BlockScriptableObject> blocks)
+        public void SetBlocks(BlockScriptableObject[] blocks)
         {
-            Assert.IsTrue(blocks.Count <= numberOfBlocksToSelect, 
-                $"Cannot set {blocks.Count} blocks in a panel that can only display {numberOfBlocksToSelect} blocks.");
-            for (int i = 0; i < numberOfBlocksToSelect; i++)
+            Assert.IsTrue(blocks.Length <= numberOfBlocksToSelect, 
+                $"Cannot set {blocks.Length} blocks in a panel that can only display {numberOfBlocksToSelect} blocks.");
+            for (int i = 0; i < blocks.Length; i++)
             {
-                if (i < blocks.Count)
+                BlockScriptableObject block = blocks[i];
+                if (block != null)
                 {
-                    blockRenderers[i].SetBlock(blocks[i]);
+                    blockRenderers[i].SetBlock(block, i);
                 }
                 else
                 {

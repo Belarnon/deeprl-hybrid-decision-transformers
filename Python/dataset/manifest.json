@@ -1,0 +1,43 @@
+{
+    "expert_trajectories" : [
+        "dataset/singles/demonstration_0.json",
+        "dataset/singles/demonstration_1.json",
+        "dataset/singles/game_session_1.json"
+    ],
+    "expert_trajectories_0" : [
+        "dataset/singles/demonstration_0.json",
+        "dataset/singles/demonstration_1.json",
+        "dataset/singles/game_session_1.json",
+        "dataset/singles/game_session_0.json"
+    ],
+    "expert_trajectories_1" : [
+        "dataset/singles/demonstration_0.json",
+        "dataset/singles/demonstration_1.json",
+        "dataset/singles/game_session_0.json",
+        "dataset/singles/game_session_1.json",
+        "dataset/singles/game_session_2.json"
+    ],
+    "expert_trajectories_2" : [
+        "dataset/singles/demonstration_0.json",
+        "dataset/singles/demonstration_1.json",
+        "dataset/singles/game_session_0.json",
+        "dataset/singles/game_session_1.json",
+        "dataset/singles/game_session_2.json",
+        "dataset/singles/last_datasets.json"
+    ],
+    "expert_trajectories_3" : [
+        "dataset/singles/demonstration_0.json",
+        "dataset/singles/demonstration_1.json",
+        "dataset/singles/game_session_0.json",
+        "dataset/singles/game_session_1.json",
+        "dataset/singles/game_session_2.json",
+        "dataset/singles/last_datasets.json",
+        "dataset/singles/last_datasets_kevin.json",
+        "dataset/singles/last_datasets_kevin_0.json",
+        "dataset/singles/last_datasets_philipp.json"
+    ],
+    "valid_together_0" : [
+        "dataset/validation/valid_short.json",
+        "dataset/validation/valid_long.json"
+    ]
+}

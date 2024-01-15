@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9e53183075c6bb74f93dba7973de34cd, type: 3}
   m_Name: Horizontal2
   m_EditorClassIdentifier: 
-  m_offsets:
-  - {x: 1, y: 0}
   center: {x: 2, y: 2}
+  m_offsets:
+  - {x: 0, y: 0}
+  - {x: 1, y: 0}
