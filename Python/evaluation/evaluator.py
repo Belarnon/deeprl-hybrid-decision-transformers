@@ -133,7 +133,7 @@ def evaluate():
             model,
             device,
             target_return=40.,
-            nr_episodes=10,
+            nr_episodes=args.nr_episodes,
             action_space=action_space,
             use_huggingface=args.hugging_transformer,
         )
