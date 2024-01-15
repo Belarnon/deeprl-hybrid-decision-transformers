@@ -1,3 +1,12 @@
+"""
+This code is adapted from the following repositories:
+
+https://github.com/kzl/decision-transformer
+https://github.com/facebookresearch/online-dt
+
+Modified to include additional functionality.
+"""
+
 import torch
 import torch.nn as nn
 import numpy as np
