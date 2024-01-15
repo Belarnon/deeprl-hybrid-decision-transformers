@@ -1,3 +1,11 @@
+"""
+This code is adapted from the following repositories:
+
+https://github.com/kzl/decision-transformer
+
+Modified to include additional functionality.
+"""
+
 import numpy as np
 import torch
 
