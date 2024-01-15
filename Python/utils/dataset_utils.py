@@ -317,10 +317,10 @@ if __name__ == '__main__':
 
     else:
         manifest = "dataset/manifest.json"
-        merged_dataset = "expert_trajectories_0"
+        merged_dataset = "valid_together_0"
         with open(manifest) as f:
             ds = json.load(f)
             dataset_paths = ds[merged_dataset]
 
-        merged_dataset_path = 'dataset/training/' + merged_dataset + ".json"
+        merged_dataset_path = 'dataset/validation/' + merged_dataset + ".json"
         merge_datasets_files(dataset_paths, merged_dataset_path)
