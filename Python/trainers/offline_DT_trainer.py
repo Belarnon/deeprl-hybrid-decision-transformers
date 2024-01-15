@@ -100,6 +100,8 @@ def parse_args():
                         help="The size of the grid in the state vector.", default=10)
     parser.add_argument("-blocksz", "--block_size", type=int,
                         help="The size of the blocks in the state vector.", default=5)
+    parser.add_argument("-xform", "--use_xformers", type=boolean_type,
+                        help="Flag to indicate whether the xFormers encoder should be used.", default=False)
     
     # TRAINING
     #   LOAD AND SAVE
@@ -226,7 +228,8 @@ def training():
             action_tanh=args.act_tanh,
             fancy_look_embedding=args.state_preprocessed,
             grid_size=args.grid_size,
-            block_size=args.block_size
+            block_size=args.block_size,
+            use_xformers=args.use_xformers
         ).to(device)
 
 
